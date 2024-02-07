@@ -29,13 +29,6 @@ jobs:
     - name: Test
       working-directory: ./Hackathon2024
       run: dotnet test --no-build --verbosity normal
-
-  performance:
-    needs: build
-  
-    runs-on: ubuntu-latest
-
-    steps:
     - name: Build
       working-directory: ./Hackathon2024
       run: dotnet build -c Release --no-restore
