@@ -38,7 +38,7 @@ jobs:
     steps:
     - name: Build
       working-directory: ./Hackathon2024
-      run: dotnet build -c release --no-restore
+      run: dotnet build -c Release --no-restore
     - name: Performance
       working-directory: ./Hackathon2024
       run: dotnet run --no-build -c Release -p $GITHUB_WORKSPACE/Hackathon2024.Benchmark/Hackathon2024.Benchmark.csproj -- ${GITHUB_REF##*/} $SASURL
