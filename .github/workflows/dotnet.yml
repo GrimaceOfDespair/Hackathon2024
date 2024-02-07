@@ -33,4 +33,6 @@ jobs:
       working-directory: ./Hackathon2024
       run: dotnet build -c Release --no-restore
     - name: Performance
+      env:
+        SASURL: ${{ secrets.SASURL }}
       run: dotnet run --no-build -c Release -p $GITHUB_WORKSPACE/Hackathon2024.Benchmark/Hackathon2024.Benchmark.csproj -- ${GITHUB_REF##*/} $SASURL
