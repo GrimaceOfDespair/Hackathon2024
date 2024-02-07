@@ -29,6 +29,15 @@ jobs:
     - name: Test
       working-directory: ./Hackathon2024
       run: dotnet test --no-build --verbosity normal
+
+  performance:
+  
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Build
+      working-directory: ./Hackathon2024
+      run: dotnet build -c release --no-restore
     - name: Performance
       working-directory: ./Hackathon2024
-      run: dotnet run -c Release -p $GITHUB_WORKSPACE/Hackathon2024.Benchmark/Hackathon2024.Benchmark.csproj -- ${GITHUB_REF##*/} $SASURL
+      run: dotnet run --no-build -c Release -p $GITHUB_WORKSPACE/Hackathon2024.Benchmark/Hackathon2024.Benchmark.csproj -- ${GITHUB_REF##*/} $SASURL
