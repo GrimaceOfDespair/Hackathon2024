@@ -9,10 +9,15 @@ namespace Hackathon2024
 
     public class ExpressionTransformer
     {
+        private const string ItemValuePrefix = "itemValue('";
+        private const string ItemValueSuffix = "')";
+        private const string ResourcePrefix = "resource('";
+        private const string ResourceSuffix = "')";
+
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
-            const string expressionStartMarker = "[%";
-            const string expressionEndMarker = "%]";
+            const string ExpressionStartMarker = "[%";
+            const string ExpressionEndMarker = "%]";
 
             if (string.IsNullOrEmpty(content))
                 return content;
@@ -22,59 +27,52 @@ namespace Hackathon2024
 
             while (currentIndex < content.Length)
             {
-                int expressionStartIndex = content.IndexOf(expressionStartMarker, currentIndex);
+                int expressionStartIndex = content.IndexOf(ExpressionStartMarker, currentIndex);
                 if (expressionStartIndex == -1)
                 {
-                    result.Append(content, currentIndex, content.Length - currentIndex);
+                    result.Append(content.Substring(currentIndex));
                     break;
                 }
 
-                int expressionEndIndex = content.IndexOf(expressionEndMarker, expressionStartIndex);
+                int expressionEndIndex = content.IndexOf(ExpressionEndMarker, expressionStartIndex);
                 if (expressionEndIndex == -1)
                 {
-                    result.Append(content, currentIndex, content.Length - currentIndex);
+                    result.Append(content.Substring(currentIndex));
                     break;
                 }
 
-                result.Append(content, currentIndex, expressionStartIndex - currentIndex);
+                result.Append(content.Substring(currentIndex, expressionStartIndex - currentIndex));
 
-                int expressionLength = expressionEndIndex - (expressionStartIndex + expressionStartMarker.Length);
-                string expression = content.Substring(expressionStartIndex + expressionStartMarker.Length, expressionLength);
+                string expression = content.Substring(expressionStartIndex + ExpressionStartMarker.Length, expressionEndIndex - expressionStartIndex - ExpressionEndMarker.Length);
                 result.Append(ProcessExpression(expression, baseUrl, data));
 
-                currentIndex = expressionEndIndex + expressionEndMarker.Length;
+                currentIndex = expressionEndIndex + ExpressionEndMarker.Length;
             }
 
             return result.ToString();
         }
 
-
         private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
         {
-            const string itemValuePrefix = "itemValue('";
-            const string itemValueSuffix = "')";
-            const string resourcePrefix = "resource('";
-            const string resourceSuffix = "')";
-
-            if (expression.StartsWith(itemValuePrefix) && expression.EndsWith(itemValueSuffix))
+            if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith(ItemValueSuffix))
             {
-                string field = expression.Substring(itemValuePrefix.Length, expression.Length - itemValuePrefix.Length - itemValueSuffix.Length);
+                string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - ItemValueSuffix.Length);
                 if (data != null && data.TryGetValue(field, out object value))
                 {
                     return value?.ToString() ?? "";
                 }
                 return "";
             }
-            else if (expression.StartsWith(resourcePrefix) && expression.EndsWith(resourceSuffix))
+            else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith(ResourceSuffix))
             {
-                string resource = expression.Substring(resourcePrefix.Length, expression.Length - resourcePrefix.Length - resourceSuffix.Length);
+                string resource = expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - ResourceSuffix.Length);
                 return baseUrl + resource;
             }
 
             return "";
         }
-
     }
+
 
     public class TemplateRenderer
     {
