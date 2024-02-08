@@ -9,15 +9,10 @@ namespace Hackathon2024
 
     public class ExpressionTransformer
     {
-        private const string ItemValuePrefix = "itemValue('";
-        private const string ItemValueSuffix = "')";
-        private const string ResourcePrefix = "resource('";
-        private const string ResourceSuffix = "')";
-
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
-            const string ExpressionStartMarker = "[%";
-            const string ExpressionEndMarker = "%]";
+            const string expressionStartMarker = "[%";
+            const string expressionEndMarker = "%]";
 
             if (string.IsNullOrEmpty(content))
                 return content;
@@ -27,14 +22,14 @@ namespace Hackathon2024
 
             while (currentIndex < content.Length)
             {
-                int expressionStartIndex = content.IndexOf(ExpressionStartMarker, currentIndex);
+                int expressionStartIndex = content.IndexOf(expressionStartMarker, currentIndex);
                 if (expressionStartIndex == -1)
                 {
                     result.Append(content.Substring(currentIndex));
                     break;
                 }
 
-                int expressionEndIndex = content.IndexOf(ExpressionEndMarker, expressionStartIndex);
+                int expressionEndIndex = content.IndexOf(expressionEndMarker, expressionStartIndex);
                 if (expressionEndIndex == -1)
                 {
                     result.Append(content.Substring(currentIndex));
@@ -43,36 +38,42 @@ namespace Hackathon2024
 
                 result.Append(content.Substring(currentIndex, expressionStartIndex - currentIndex));
 
-                string expression = content.Substring(expressionStartIndex + ExpressionStartMarker.Length, expressionEndIndex - expressionStartIndex - ExpressionEndMarker.Length);
+                string expression = content.Substring(expressionStartIndex + expressionStartMarker.Length, expressionEndIndex - expressionStartIndex - expressionEndMarker.Length);
                 result.Append(ProcessExpression(expression, baseUrl, data));
 
-                currentIndex = expressionEndIndex + ExpressionEndMarker.Length;
+                currentIndex = expressionEndIndex + expressionEndMarker.Length;
             }
 
             return result.ToString();
         }
 
+
         private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
         {
-            if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith(ItemValueSuffix))
+            const string itemValuePrefix = "itemValue('";
+            const string itemValueSuffix = "')";
+            const string resourcePrefix = "resource('";
+            const string resourceSuffix = "')";
+
+            if (expression.StartsWith(itemValuePrefix) && expression.EndsWith(itemValueSuffix))
             {
-                string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - ItemValueSuffix.Length);
+                string field = expression.Substring(itemValuePrefix.Length, expression.Length - itemValuePrefix.Length - itemValueSuffix.Length);
                 if (data != null && data.TryGetValue(field, out object value))
                 {
                     return value?.ToString() ?? "";
                 }
                 return "";
             }
-            else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith(ResourceSuffix))
+            else if (expression.StartsWith(resourcePrefix) && expression.EndsWith(resourceSuffix))
             {
-                string resource = expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - ResourceSuffix.Length);
+                string resource = expression.Substring(resourcePrefix.Length, expression.Length - resourcePrefix.Length - resourceSuffix.Length);
                 return baseUrl + resource;
             }
 
             return "";
         }
-    }
 
+    }
 
     public class TemplateRenderer
     {
