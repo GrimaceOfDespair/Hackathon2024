@@ -197,9 +197,8 @@ namespace Hackathon2024
                     string dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
                     string repeaterItemContent = repeaterItemNode.InnerHtml;
                     StringBuilder repeatedContent = new StringBuilder();
-                    for (int k = 0; k < allData[dataSelection].Length; k++)
+                    foreach (var dataItem in allData[dataSelection])
                     {
-                        var dataItem = allData[dataSelection][k];
                         string result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
                         repeatedContent.Append(result);
                     }
@@ -209,9 +208,8 @@ namespace Hackathon2024
             }
 
             HtmlNode[] imageNodes = document.DocumentNode.SelectNodes("//img")?.ToArray() ?? Array.Empty<HtmlNode>();
-            for (int i = 0; i < imageNodes.Length; i++)
+            foreach (var imageNode in imageNodes)
             {
-                var imageNode = imageNodes[i];
                 string srcAttributeValue = imageNode.GetAttributeValue("src", "");
                 string result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
                 imageNode.SetAttributeValue("src", result);
