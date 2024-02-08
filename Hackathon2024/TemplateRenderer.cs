@@ -102,9 +102,10 @@ namespace Hackathon2024
 
     public class TemplateRenderer
     {
-        public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
+        public void RenderTemplate(TextReader template, TextWriter output,
+            Dictionary<string, Dictionary<string, object>[]> allData)
         {
-            using var document = new HtmlDocument();
+            var document = new HtmlDocument();
             document.Load(template);
 
             string baseUrl = GetBaseUrl(allData);
@@ -124,9 +125,11 @@ namespace Hackathon2024
                             var repeatedContent = new StringBuilder();
                             foreach (var dataItem in allData[dataSelection])
                             {
-                                string result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
+                                string result =
+                                    ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
                                 repeatedContent.Append(result);
                             }
+
                             ReplaceHtml(repeaterNode, repeatedContent);
                         }
                     }
@@ -159,6 +162,7 @@ namespace Hackathon2024
                     }
                 }
             }
+
             return "";
         }
 
