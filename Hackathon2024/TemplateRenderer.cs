@@ -159,28 +159,39 @@ namespace Hackathon2024
 
             return expression;
         }
-
-       
     }
-
-
-
 
 
     public class TemplateRenderer
     {
+        private string GetBaseUrl(Data allData)
+        {
+            foreach (var entry in allData["variables"])
+            {
+                if (entry.TryGetValue("name", out var name) && "baseurl".Equals(name?.ToString()))
+                {
+                    if (entry.TryGetValue("value", out var value))
+                    {
+                        return value?.ToString() ?? "";
+                    }
+                }
+            }
+
+            return "";
+        }
+
+        // Other methods...
+
         public void RenderTemplate(TextReader template, TextWriter output, Data allData)
         {
             var document = new HtmlDocument();
             document.Load(template);
 
-            var baseUrl = allData["variables"]
-                .Where(x =>
-                    x.TryGetValue("name", out object name) &&
-                    "baseurl".Equals(name.ToString()))
-                .Select(x =>
-                    x["value"]?.ToString() ?? "")
-                .FirstOrDefault();
+            // Other members...
+
+
+            string baseUrl = GetBaseUrl(allData);
+
 
             HtmlNode[] repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']")?.ToArray() ??
                                        Array.Empty<HtmlNode>();
@@ -229,9 +240,9 @@ namespace Hackathon2024
 
             repeaterNode.Remove();
 
-            foreach (var child in repeatedNodes)
+            for (int i = 0; i < repeatedNodes.Count; i++)
             {
-                parent.AppendChild(child);
+                parent.AppendChild(repeatedNodes[i]);
             }
         }
     }
