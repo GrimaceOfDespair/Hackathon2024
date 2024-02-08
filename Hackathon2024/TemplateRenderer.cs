@@ -21,9 +21,17 @@ namespace Hackathon2024
     /// </summary>
     public class ExpressionTransformer
     {
-        private static readonly Regex ExpressionDetector = new Regex(@"\[%(?<expression>.*?)%\]", RegexOptions.Compiled);
-        private static readonly Regex ItemValueFieldDetector = new Regex(@"itemValue\('(?<field>.*?)'\)", RegexOptions.Compiled);
-        private static readonly Regex ResourceFieldDetector = new Regex(@"resource\('(?<resource>.*?)'\)", RegexOptions.Compiled);
+        private static readonly Regex ExpressionDetector =
+            new Regex(@"\[%(?<expression>.*?)%\]",
+            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
+
+        private static readonly Regex ItemValueFieldDetector =
+            new Regex(@"itemValue\('(?<field>.*?)'\)",
+            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
+
+        private static readonly Regex ResourceFieldDetector =
+            new Regex(@"resource\('(?<resource>.*?)'\)",
+            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
 
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
@@ -31,18 +39,18 @@ namespace Hackathon2024
             {
                 var expression = expressionMatch.Groups["expression"].Value;
 
-                expression = ItemValueFieldDetector.Replace(expression, innerMatch =>
+                expression = ItemValueFieldDetector.Replace(expression, expressionMatch =>
                 {
-                    var field = innerMatch.Groups["field"].Value;
-                    if (data != null && data.TryGetValue(field, out var value))
-                        return value?.ToString() ?? "";
-                    return "";
+                    var field = expressionMatch.Groups["field"].Value;
+
+                    return (data[field] ?? "").ToString();
                 });
 
-                expression = ResourceFieldDetector.Replace(expression, innerMatch =>
+                expression = ResourceFieldDetector.Replace(expression, expressionMatch =>
                 {
-                    var resource = innerMatch.Groups["resource"].Value;
-                    return baseUrl + resource;
+                    var resource = expressionMatch.Groups["resource"].Value;
+
+                    return $"{baseUrl}{resource}";
                 });
 
                 return expression;
