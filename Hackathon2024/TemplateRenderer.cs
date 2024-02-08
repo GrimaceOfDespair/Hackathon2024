@@ -61,23 +61,28 @@ namespace Hackathon2024
             const string resourcePrefix = "resource('";
             const string resourceSuffix = "')";
 
+            var itemValuePrefixLength = itemValuePrefix.Length;
+            var itemValueSuffixLength = itemValueSuffix.Length;
+            var resourcePrefixLength = resourcePrefix.Length;
+            var resourceSuffixLength = resourceSuffix.Length;
+
             if (expression.StartsWith(itemValuePrefix) && expression.EndsWith(itemValueSuffix))
             {
-                string field = expression.Substring(itemValuePrefix.Length, expression.Length - itemValuePrefix.Length - itemValueSuffix.Length);
-                if (data != null && data.TryGetValue(field, out object value))
+                string field = expression.Substring(itemValuePrefixLength, expression.Length - itemValuePrefixLength - itemValueSuffixLength);
+                if (data.TryGetValue(field, out object value))
                 {
-                    return value?.ToString() ?? "";
+                    return value?.ToString() ?? string.Empty;
                 }
-                return "";
             }
             else if (expression.StartsWith(resourcePrefix) && expression.EndsWith(resourceSuffix))
             {
-                string resource = expression.Substring(resourcePrefix.Length, expression.Length - resourcePrefix.Length - resourceSuffix.Length);
-                return baseUrl + resource;
+                string resource = expression.Substring(resourcePrefixLength, expression.Length - resourcePrefixLength - resourceSuffixLength);
+                return $"{baseUrl}{resource}";
             }
 
-            return "";
+            return string.Empty;
         }
+
 
     }
 
