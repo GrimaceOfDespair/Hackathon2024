@@ -6,46 +6,52 @@ namespace Hackathon2024
     using System.IO;
     using System.Linq;
     using System.Text;
+    using System.Text.RegularExpressions;
 
     public class ExpressionTransformer
     {
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
-            const string expressionStartMarker = "[%";
-            const string expressionEndMarker = "%]";
-
             if (string.IsNullOrEmpty(content))
+            {
                 return content;
+            }
 
             StringBuilder result = new StringBuilder(content.Length);
-            int currentIndex = 0;
+            Match match;
+            int lastIndex = 0;
 
-            while (currentIndex < content.Length)
+            // Pattern to find expressions enclosed in [% %] markers
+            string pattern = @"\[%(.*?)%\]";
+            Regex regex = new Regex(pattern);
+
+            while ((match = regex.Match(content, lastIndex)).Success)
             {
-                int expressionStartIndex = content.IndexOf(expressionStartMarker, currentIndex);
-                if (expressionStartIndex == -1)
+                // Append text before the expression
+                result.Append(content, lastIndex, match.Index - lastIndex);
+
+                // Process the expression and append the result
+                try
                 {
-                    result.Append(content.Substring(currentIndex));
-                    break;
+                    result.Append(ProcessExpression(match.Groups[1].Value, baseUrl, data));
+                }
+                catch (Exception ex)
+                {
+                    // Handle exception (log, throw, etc.)
+                    // For simplicity, let's just append the expression as is if there's an error
+                    result.Append($"[{match.Groups[1].Value}]");
                 }
 
-                int expressionEndIndex = content.IndexOf(expressionEndMarker, expressionStartIndex);
-                if (expressionEndIndex == -1)
-                {
-                    result.Append(content.Substring(currentIndex));
-                    break;
-                }
-
-                result.Append(content.Substring(currentIndex, expressionStartIndex - currentIndex));
-
-                string expression = content.Substring(expressionStartIndex + expressionStartMarker.Length, expressionEndIndex - expressionStartIndex - expressionEndMarker.Length);
-                result.Append(ProcessExpression(expression, baseUrl, data));
-
-                currentIndex = expressionEndIndex + expressionEndMarker.Length;
+                // Update the last index processed
+                lastIndex = match.Index + match.Length;
             }
+
+            // Append remaining text after the last expression
+            result.Append(content, lastIndex, content.Length - lastIndex);
 
             return result.ToString();
         }
+
 
 
         private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
