@@ -22,16 +22,13 @@ namespace Hackathon2024
     public class ExpressionTransformer
     {
         private static readonly Regex ExpressionDetector =
-            new Regex(@"\[%(?<expression>.*?)%\]",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
+            new Regex(@"\[%(?<expression>.*?)%\]", RegexOptions.Compiled);
 
         private static readonly Regex ItemValueFieldDetector =
-            new Regex(@"itemValue\('(?<field>.*?)'\)",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
+            new Regex(@"itemValue\('(?<field>.*?)'\)", RegexOptions.Compiled);
 
         private static readonly Regex ResourceFieldDetector =
-            new Regex(@"resource\('(?<resource>.*?)'\)",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
+            new Regex(@"resource\('(?<resource>.*?)'\)", RegexOptions.Compiled);
 
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
