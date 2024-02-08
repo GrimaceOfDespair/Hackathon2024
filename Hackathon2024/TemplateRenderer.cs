@@ -23,14 +23,14 @@ namespace Hackathon2024
     {
         //private const string ExpressionPattern = @"\[%(?<expression>.*?)%\]";
         //private const string ItemValueFieldPattern = @"itemValue\('(?<field>.*?)'\)";
-       //private const string ResourceFieldPattern = @"resource\('(?<resource>.*?)'\)";
+        //private const string ResourceFieldPattern = @"resource\('(?<resource>.*?)'\)";
 
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
-            // Optimize string manipulation
-            StringBuilder resultBuilder = new(content.Length);
+            StringBuilder resultBuilder = new StringBuilder(content.Length);
             int prevIndex = 0;
-            int startIndex = content.IndexOf("[%", prevIndex, StringComparison.Ordinal);
+            int startIndex = content.IndexOf("[%", StringComparison.Ordinal);
+
             while (startIndex != -1)
             {
                 int endIndex = content.IndexOf("%]", startIndex, StringComparison.Ordinal);
@@ -42,7 +42,7 @@ namespace Hackathon2024
 
                 // Append content before the matched expression
                 resultBuilder.Append(content, prevIndex, startIndex - prevIndex);
-        
+
                 // Extract expression and perform replacements
                 string expression = content.Substring(startIndex + 2, endIndex - startIndex - 2);
                 expression = ReplaceItemValueFields(expression, data);
@@ -80,18 +80,19 @@ namespace Hackathon2024
                 if (fieldEndIndex == -1)
                     break;
 
-                string field = expression[fieldStartIndex..fieldEndIndex];
+                string field = expression.Substring(fieldStartIndex, fieldEndIndex - fieldStartIndex);
+
                 if (data != null && data.TryGetValue(field, out object value))
                 {
-                    // Calculate the length of the resulting string after replacement
                     if (value != null)
                     {
-                        int valueLength = value.ToString()!.Length;
+                        // Calculate the length of the resulting string after replacement
+                        int valueLength = value.ToString().Length;
                         int replaceLength = fieldEndIndex - matchIndex + 2;
 
                         // Replace the matched substring directly within the existing string
                         expression = expression.Remove(matchIndex, replaceLength)
-                            .Insert(matchIndex, value.ToString() ?? throw new InvalidOperationException());
+                            .Insert(matchIndex, value.ToString());
 
                         // Update the startIndex for the next search
                         startIndex = matchIndex + valueLength;
@@ -111,11 +112,11 @@ namespace Hackathon2024
             return expression;
         }
 
-
         private static string ReplaceResourceFields(string expression, string baseUrl)
         {
             int startIndex = 0;
             int expressionLength = expression.Length;
+            int baseUrlLength = baseUrl.Length;
 
             while (true)
             {
@@ -128,17 +129,28 @@ namespace Hackathon2024
                 if (resourceEndIndex == -1)
                     break;
 
-                string resource = expression[resourceStartIndex..resourceEndIndex];
-
                 // Calculate the length of the resulting string after replacement
                 int replaceLength = resourceEndIndex - matchIndex + 2;
 
-                // Replace the matched substring directly within the existing string
-                expression = expression.Remove(matchIndex, replaceLength)
-                    .Insert(matchIndex, $"{baseUrl}{resource}");
+                // Ensure the capacity of the resulting string
+                int newLength = expression.Length - replaceLength + baseUrlLength;
+                StringBuilder resultBuilder = new StringBuilder(newLength);
+
+                // Append the content before the matched substring
+                resultBuilder.Append(expression, 0, matchIndex);
+
+                // Append the base URL and resource
+                resultBuilder.Append(baseUrl);
+                resultBuilder.Append(expression, resourceStartIndex, resourceEndIndex - resourceStartIndex);
+
+                // Append the content after the matched substring
+                resultBuilder.Append(expression, resourceEndIndex + 2, expression.Length - resourceEndIndex - 2);
+
+                // Update the expression with the modified string
+                expression = resultBuilder.ToString();
 
                 // Update the startIndex for the next search
-                startIndex = matchIndex + baseUrl.Length + resource.Length;
+                startIndex = matchIndex + baseUrlLength + resourceEndIndex - resourceStartIndex;
 
                 // Ensure startIndex stays within bounds
                 if (startIndex >= expressionLength)
@@ -148,7 +160,12 @@ namespace Hackathon2024
             return expression;
         }
 
+       
     }
+
+
+
+
 
     public class TemplateRenderer
     {
