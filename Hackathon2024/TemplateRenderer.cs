@@ -18,10 +18,6 @@ namespace Hackathon2024
     /// </summary>
     public static class ExpressionTransformer
     {
-        //private const string ExpressionPattern = @"\[%(?<expression>.*?)%\]";
-        //private const string ItemValueFieldPattern = @"itemValue\('(?<field>.*?)'\)";
-        //private const string ResourceFieldPattern = @"resource\('(?<resource>.*?)'\)";
-
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
             StringBuilder resultBuilder = new StringBuilder(content.Length);
@@ -161,25 +157,22 @@ namespace Hackathon2024
 
     public class TemplateRenderer
     {
-        private string GetBaseUrl(Data allData)
+        private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
         {
-            foreach (var entry in allData["variables"])
+            for (int i = 0; i < allData["variables"].Length; i++)
             {
-                if (entry.TryGetValue("name", out var name) && "baseurl".Equals(name?.ToString()))
+                var dataItem = allData["variables"][i];
+                if (dataItem.TryGetValue("name", out object name) && "baseurl".Equals(name.ToString()))
                 {
-                    if (entry.TryGetValue("value", out var value))
-                    {
-                        return value?.ToString() ?? "";
-                    }
+                    return dataItem["value"]?.ToString() ?? "";
                 }
             }
-
             return "";
         }
 
         // Other methods...
 
-        public void RenderTemplate(TextReader template, TextWriter output, Data allData)
+        public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
         {
             var document = new HtmlDocument();
             document.Load(template);
@@ -197,9 +190,10 @@ namespace Hackathon2024
                 HtmlNode[] repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']")?.ToArray() ??
                                                Array.Empty<HtmlNode>();
 
-                foreach (var repeaterItemNode in repeaterItemNodes)
+                for (var index = 0; index < repeaterItemNodes.Length; index++)
                 {
-                    var repeaterItemNode = repeaterItemNodes[j];
+                    var repeaterItemNode = repeaterItemNodes[index];
+                    repeaterItemNode = repeaterItemNodes[index];
                     string dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
                     string repeaterItemContent = repeaterItemNode.InnerHtml;
                     StringBuilder repeatedContent = new StringBuilder();
@@ -209,6 +203,7 @@ namespace Hackathon2024
                         string result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
                         repeatedContent.Append(result);
                     }
+
                     ReplaceHtml(repeaterNode, repeatedContent);
                 }
             }
@@ -225,25 +220,14 @@ namespace Hackathon2024
             document.Save(output);
         }
 
-        private static string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
-        {
-            for (int i = 0; i < allData["variables"].Length; i++)
-            {
-                var dataItem = allData["variables"][i];
-                if (dataItem.TryGetValue("name", out object name) && "baseurl".Equals(name.ToString()))
-                {
-                    return dataItem["value"]?.ToString() ?? "";
-                }
-            }
-            return "";
-        }
-
         private static void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
         {
             repeaterNode.InnerHtml = repeatedContent.ToString();
 
-            HtmlNode[] repeatedNodes = repeaterNode.ChildNodes.ToArray();
-            HtmlNode parent = repeaterNode.ParentNode;
+            var repeatedNodes = repeaterNode.ChildNodes;
+
+            var parent = repeaterNode.ParentNode;
+
             repeaterNode.Remove();
 
             for (int i = 0; i < repeatedNodes.Count; i++)
@@ -251,5 +235,6 @@ namespace Hackathon2024
                 parent.AppendChild(repeatedNodes[i]);
             }
         }
+
     }
 }
