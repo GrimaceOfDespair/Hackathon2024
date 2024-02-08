@@ -6,9 +6,7 @@ namespace Hackathon2024
     using System.IO;
     using System.Linq;
     using System.Text;
-    using System.Text.RegularExpressions;
     using Data = System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, object>[]>;
-
 
     public struct KnownExpressions
     {
@@ -21,55 +19,66 @@ namespace Hackathon2024
     /// </summary>
     public class ExpressionTransformer
     {
-        private static readonly Regex ExpressionDetector =
-            new Regex(@"\[%(?<expression>.*?)%\]",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
-        private static readonly Regex ItemValueFieldDetector =
-            new Regex(@"itemValue\('(?<field>.*?)'\)",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
-        private static readonly Regex ResourceFieldDetector =
-            new Regex(@"resource\('(?<resource>.*?)'\)",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
             if (string.IsNullOrEmpty(content))
                 return content;
 
             var result = new StringBuilder(content.Length);
+            int lastIndex = 0;
 
-            int lastMatchIndex = 0;
-
-            foreach (Match expressionMatch in ExpressionDetector.Matches(content))
+            while (true)
             {
-                result.Append(content, lastMatchIndex, expressionMatch.Index - lastMatchIndex);
+                int startExpressionIndex = content.IndexOf("[%", lastIndex);
+                if (startExpressionIndex == -1)
+                    break;
 
-                var expression = expressionMatch.Groups["expression"].Value;
+                int endExpressionIndex = content.IndexOf("%]", startExpressionIndex + 2);
+                if (endExpressionIndex == -1)
+                    break;
 
-                expression = ItemValueFieldDetector.Replace(expression, expressionMatch =>
-                {
-                    var field = expressionMatch.Groups["field"].Value;
-                    var value = (data != null && data.TryGetValue(field, out var val)) ? val : "";
-                    return value.ToString();
-                });
+                result.Append(content, lastIndex, startExpressionIndex - lastIndex);
 
-                expression = ResourceFieldDetector.Replace(expression, expressionMatch =>
-                {
-                    var resource = expressionMatch.Groups["resource"].Value;
-                    return $"{baseUrl}{resource}";
-                });
+                string expression = content.Substring(startExpressionIndex + 2, endExpressionIndex - startExpressionIndex - 2);
+                expression = ReplaceItemValueField(expression, data);
+                expression = ReplaceResourceField(expression, baseUrl);
 
                 result.Append(expression);
 
-                lastMatchIndex = expressionMatch.Index + expressionMatch.Length;
+                lastIndex = endExpressionIndex + 2;
             }
 
-            if (lastMatchIndex < content.Length)
-                result.Append(content, lastMatchIndex, content.Length - lastMatchIndex);
-
+            result.Append(content, lastIndex, content.Length - lastIndex);
             return result.ToString();
+        }
+
+        private static string ReplaceItemValueField(string expression, Dictionary<string, object> data)
+        {
+            int startIndex = expression.IndexOf("itemValue('");
+            if (startIndex == -1)
+                return expression;
+
+            int endIndex = expression.IndexOf("'", startIndex + 10);
+            if (endIndex == -1)
+                return expression;
+
+            string field = expression.Substring(startIndex + 10, endIndex - startIndex - 10);
+            object value = (data != null && data.TryGetValue(field, out var val)) ? val : "";
+            return expression.Substring(0, startIndex) + value.ToString() + expression.Substring(endIndex + 1);
+        }
+
+        private static string ReplaceResourceField(string expression, string baseUrl)
+        {
+            int startIndex = expression.IndexOf("resource('");
+            if (startIndex == -1)
+                return expression;
+
+            int endIndex = expression.IndexOf("'", startIndex + 10);
+            if (endIndex == -1)
+                return expression;
+
+            string resource = expression.Substring(startIndex + 10, endIndex - startIndex - 10);
+            return baseUrl + resource + expression.Substring(endIndex + 1);
         }
     }
 
