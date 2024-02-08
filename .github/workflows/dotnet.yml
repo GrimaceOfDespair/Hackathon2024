@@ -5,7 +5,7 @@ name: .NET
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "team-*" ]
   pull_request:
     branches: [ "main" ]
 
@@ -29,6 +29,10 @@ jobs:
     - name: Test
       working-directory: ./Hackathon2024
       run: dotnet test --no-build --verbosity normal
-    - name: Performance
+    - name: Build
       working-directory: ./Hackathon2024
-      run: dotnet run -c Release -p $GITHUB_WORKSPACE/Hackathon2024.Benchmark/Hackathon2024.Benchmark.csproj -- ${GITHUB_REF##*/} $SASURL
+      run: dotnet build -c Release --no-restore
+    - name: Performance
+      env:
+        SASURL: ${{ secrets.SASURL }}
+      run: dotnet run --no-build -c Release -p $GITHUB_WORKSPACE/Hackathon2024.Benchmark/Hackathon2024.Benchmark.csproj -- ${GITHUB_REF##*/} $SASURL

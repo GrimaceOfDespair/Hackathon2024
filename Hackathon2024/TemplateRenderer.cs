@@ -1,15 +1,12 @@
+using HtmlAgilityPack;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+
 namespace Hackathon2024
 {
-    using HtmlAgilityPack;
-    using System;
-    using System.Collections.Generic;
-    using System.IO;
-    using System.Linq;
-    using System.Text;
-    using System.Text.RegularExpressions;
-    using Data = System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, object>[]>;
-
-
     public struct KnownExpressions
     {
         public const string ItemValue = "itemValue";
@@ -202,42 +199,51 @@ namespace Hackathon2024
 
                 foreach (var repeaterItemNode in repeaterItemNodes)
                 {
-                    var dataSelection = repeaterNode.Attributes["dataselection"].Value;
-                    var repeaterItemContent = repeaterItemNode.InnerHtml;
-
-                    var repeatedContent = new StringBuilder();
-                    foreach (var dataItem in allData[dataSelection])
+                    var repeaterItemNode = repeaterItemNodes[j];
+                    string dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
+                    string repeaterItemContent = repeaterItemNode.InnerHtml;
+                    StringBuilder repeatedContent = new StringBuilder();
+                    for (int k = 0; k < allData[dataSelection].Length; k++)
                     {
-                        var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
-
+                        var dataItem = allData[dataSelection][k];
+                        string result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
                         repeatedContent.Append(result);
                     }
-
                     ReplaceHtml(repeaterNode, repeatedContent);
                 }
             }
 
             HtmlNode[] imageNodes = document.DocumentNode.SelectNodes("//img")?.ToArray() ?? Array.Empty<HtmlNode>();
-            foreach (var imageNode in imageNodes)
+            for (int i = 0; i < imageNodes.Length; i++)
             {
-                var srcAttributeValue = imageNode.Attributes["src"].Value;
-
-                var result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
-
-                imageNode.Attributes["src"].Value = result;
+                var imageNode = imageNodes[i];
+                string srcAttributeValue = imageNode.GetAttributeValue("src", "");
+                string result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
+                imageNode.SetAttributeValue("src", result);
             }
 
-            document.DocumentNode.WriteTo(output);
+            document.Save(output);
+        }
+
+        private static string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
+        {
+            for (int i = 0; i < allData["variables"].Length; i++)
+            {
+                var dataItem = allData["variables"][i];
+                if (dataItem.TryGetValue("name", out object name) && "baseurl".Equals(name.ToString()))
+                {
+                    return dataItem["value"]?.ToString() ?? "";
+                }
+            }
+            return "";
         }
 
         private static void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
         {
             repeaterNode.InnerHtml = repeatedContent.ToString();
 
-            var repeatedNodes = repeaterNode.ChildNodes;
-
-            var parent = repeaterNode.ParentNode;
-
+            HtmlNode[] repeatedNodes = repeaterNode.ChildNodes.ToArray();
+            HtmlNode parent = repeaterNode.ParentNode;
             repeaterNode.Remove();
 
             for (int i = 0; i < repeatedNodes.Count; i++)
