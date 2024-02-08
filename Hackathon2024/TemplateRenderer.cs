@@ -35,26 +35,41 @@ namespace Hackathon2024
 
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
-            return ExpressionDetector.Replace(content, expressionMatch =>
+            if (string.IsNullOrEmpty(content))
+                return content;
+
+            var result = new StringBuilder(content.Length);
+
+            int lastMatchIndex = 0;
+
+            foreach (Match expressionMatch in ExpressionDetector.Matches(content))
             {
+                result.Append(content, lastMatchIndex, expressionMatch.Index - lastMatchIndex);
+
                 var expression = expressionMatch.Groups["expression"].Value;
 
                 expression = ItemValueFieldDetector.Replace(expression, expressionMatch =>
                 {
                     var field = expressionMatch.Groups["field"].Value;
-
-                    return (data[field] ?? "").ToString();
+                    var value = (data != null && data.TryGetValue(field, out var val)) ? val : "";
+                    return value.ToString();
                 });
 
                 expression = ResourceFieldDetector.Replace(expression, expressionMatch =>
                 {
                     var resource = expressionMatch.Groups["resource"].Value;
-
                     return $"{baseUrl}{resource}";
                 });
 
-                return expression;
-            });
+                result.Append(expression);
+
+                lastMatchIndex = expressionMatch.Index + expressionMatch.Length;
+            }
+
+            if (lastMatchIndex < content.Length)
+                result.Append(content, lastMatchIndex, content.Length - lastMatchIndex);
+
+            return result.ToString();
         }
     }
 
@@ -125,4 +140,3 @@ namespace Hackathon2024
         }
     }
 }
-
