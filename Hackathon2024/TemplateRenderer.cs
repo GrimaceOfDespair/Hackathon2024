@@ -141,19 +141,14 @@ public class TemplateRenderer
 
     private void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
     {
-        // Create a temporary node to hold the repeated content
-        HtmlDocument doc = repeaterNode.OwnerDocument;
-        HtmlNode tempNode = doc.CreateElement("temp");
-        tempNode.InnerHtml = repeatedContent.ToString();
-
-        // Insert the repeated content before the repeaterNode
-        if (repeaterNode.ParentNode != null)
-        {
-            repeaterNode.ParentNode.InsertBefore(tempNode, repeaterNode);
-        }
-
-        // Remove the repeaterNode
+        repeaterNode.InnerHtml = repeatedContent.ToString();
+        var repeatedNodes = repeaterNode.ChildNodes;
+        var parent = repeaterNode.ParentNode;
         repeaterNode.Remove();
-    }
 
+        foreach (var child in repeatedNodes)
+        {
+            parent.AppendChild(child);
+        }
+    }
 }
