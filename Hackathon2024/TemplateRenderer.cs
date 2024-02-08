@@ -153,7 +153,7 @@ namespace Hackathon2024
 
         public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
         {
-             var document = new HtmlDocument();
+            var document = new HtmlDocument();
             document.Load(template);
 
             string baseUrl = GetBaseUrl(allData);
