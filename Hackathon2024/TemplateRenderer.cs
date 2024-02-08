@@ -2,7 +2,6 @@ using HtmlAgilityPack;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace Hackathon2024
@@ -13,14 +12,11 @@ namespace Hackathon2024
         public const string Resource = "resource";
     }
 
-    /// <summary>
-    /// ExpressionTransformer for Parsing Selligent specific expressions '[% %]'
-    /// </summary>
     public static class ExpressionTransformer
     {
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
-            StringBuilder resultBuilder = new StringBuilder(content.Length);
+            var resultBuilder = new StringBuilder(content.Length);
             int prevIndex = 0;
             int startIndex = content.IndexOf("[%", StringComparison.Ordinal);
 
@@ -56,11 +52,11 @@ namespace Hackathon2024
             return resultBuilder.ToString();
         }
 
-
         private static string ReplaceItemValueFields(string expression, Dictionary<string, object> data)
         {
             int startIndex = 0;
             int expressionLength = expression.Length;
+            var resultBuilder = new StringBuilder(expressionLength);
 
             while (true)
             {
@@ -79,30 +75,28 @@ namespace Hackathon2024
                 {
                     if (value != null)
                     {
-                        // Calculate the length of the resulting string after replacement
-                        int valueLength = value.ToString().Length;
-                        int replaceLength = fieldEndIndex - matchIndex + 2;
-
-                        // Replace the matched substring directly within the existing string
-                        expression = expression.Remove(matchIndex, replaceLength)
-                            .Insert(matchIndex, value.ToString());
-
-                        // Update the startIndex for the next search
-                        startIndex = matchIndex + valueLength;
+                        resultBuilder.Append(expression, startIndex, matchIndex - startIndex);
+                        resultBuilder.Append(value);
                     }
                 }
                 else
                 {
-                    // If the field is not found in the dictionary, move to the next character
-                    startIndex = fieldEndIndex + 2;
+                    resultBuilder.Append(expression, startIndex, fieldEndIndex - startIndex + 2);
                 }
+
+                // Update the startIndex for the next search
+                startIndex = fieldEndIndex + 2;
 
                 // Ensure startIndex stays within bounds
                 if (startIndex >= expressionLength)
                     break;
             }
 
-            return expression;
+            // Append the remaining content if any
+            if (startIndex < expressionLength)
+                resultBuilder.Append(expression, startIndex, expressionLength - startIndex);
+
+            return resultBuilder.ToString();
         }
 
         private static string ReplaceResourceFields(string expression, string baseUrl)
@@ -110,6 +104,7 @@ namespace Hackathon2024
             int startIndex = 0;
             int expressionLength = expression.Length;
             int baseUrlLength = baseUrl.Length;
+            var resultBuilder = new StringBuilder(expressionLength + baseUrlLength);
 
             while (true)
             {
@@ -122,99 +117,80 @@ namespace Hackathon2024
                 if (resourceEndIndex == -1)
                     break;
 
-                // Calculate the length of the resulting string after replacement
-                int replaceLength = resourceEndIndex - matchIndex + 2;
-
-                // Ensure the capacity of the resulting string
-                int newLength = expression.Length - replaceLength + baseUrlLength;
-                StringBuilder resultBuilder = new StringBuilder(newLength);
-
-                // Append the content before the matched substring
-                resultBuilder.Append(expression, 0, matchIndex);
-
-                // Append the base URL and resource
+                resultBuilder.Append(expression, startIndex, matchIndex - startIndex);
                 resultBuilder.Append(baseUrl);
                 resultBuilder.Append(expression, resourceStartIndex, resourceEndIndex - resourceStartIndex);
 
-                // Append the content after the matched substring
-                resultBuilder.Append(expression, resourceEndIndex + 2, expression.Length - resourceEndIndex - 2);
-
-                // Update the expression with the modified string
-                expression = resultBuilder.ToString();
-
                 // Update the startIndex for the next search
-                startIndex = matchIndex + baseUrlLength + resourceEndIndex - resourceStartIndex;
+                startIndex = resourceEndIndex + 2;
 
                 // Ensure startIndex stays within bounds
                 if (startIndex >= expressionLength)
                     break;
             }
 
-            return expression;
+            // Append the remaining content if any
+            if (startIndex < expressionLength)
+                resultBuilder.Append(expression, startIndex, expressionLength - startIndex);
+
+            return resultBuilder.ToString();
         }
     }
-
 
     public class TemplateRenderer
     {
         private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
         {
-            for (int i = 0; i < allData["variables"].Length; i++)
+            foreach (var entry in allData["variables"])
             {
-                var dataItem = allData["variables"][i];
-                if (dataItem.TryGetValue("name", out object name) && "baseurl".Equals(name.ToString()))
+                if (entry.TryGetValue("name", out var name) && "baseurl".Equals(name?.ToString()))
                 {
-                    return dataItem["value"]?.ToString() ?? "";
+                    return entry.TryGetValue("value", out var value) ? value.ToString() : "";
                 }
             }
             return "";
         }
-
-        // Other methods...
 
         public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
         {
             var document = new HtmlDocument();
             document.Load(template);
 
-            // Other members...
-
-
             string baseUrl = GetBaseUrl(allData);
 
-
-            HtmlNode[] repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']")?.ToArray() ??
-                                       Array.Empty<HtmlNode>();
-            foreach (var repeaterNode in repeaterNodes)
+            var repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']");
+            if (repeaterNodes != null)
             {
-                HtmlNode[] repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']")?.ToArray() ??
-                                               Array.Empty<HtmlNode>();
-
-                for (var index = 0; index < repeaterItemNodes.Length; index++)
+                foreach (var repeaterNode in repeaterNodes)
                 {
-                    var repeaterItemNode = repeaterItemNodes[index];
-                    repeaterItemNode = repeaterItemNodes[index];
-                    string dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
-                    string repeaterItemContent = repeaterItemNode.InnerHtml;
-                    StringBuilder repeatedContent = new StringBuilder();
-                    for (int k = 0; k < allData[dataSelection].Length; k++)
+                    var repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']");
+                    if (repeaterItemNodes != null)
                     {
-                        var dataItem = allData[dataSelection][k];
-                        string result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
-                        repeatedContent.Append(result);
+                        foreach (var repeaterItemNode in repeaterItemNodes)
+                        {
+                            string dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
+                            string repeaterItemContent = repeaterItemNode.InnerHtml;
+                            var repeatedContent = new StringBuilder();
+                            foreach (var dataItem in allData[dataSelection])
+                            {
+                                string result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
+                                repeatedContent.Append(result);
+                            }
+                            ReplaceHtml(repeaterNode, repeatedContent);
+                        }
                     }
-
-                    ReplaceHtml(repeaterNode, repeatedContent);
                 }
             }
 
-            HtmlNode[] imageNodes = document.DocumentNode.SelectNodes("//img")?.ToArray() ?? Array.Empty<HtmlNode>();
-            for (int i = 0; i < imageNodes.Length; i++)
+            var imageNodes = document.DocumentNode.SelectNodes("//img");
+            if (imageNodes != null)
             {
-                var imageNode = imageNodes[i];
-                string srcAttributeValue = imageNode.GetAttributeValue("src", "");
-                string result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
-                imageNode.SetAttributeValue("src", result);
+                foreach (var imageNode in imageNodes)
+                {
+                    string srcAttributeValue = imageNode.GetAttributeValue("src", "");
+                    string result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
+                    imageNode.SetAttributeValue("src", result);
+                }
             }
 
             document.Save(output);
@@ -225,16 +201,14 @@ namespace Hackathon2024
             repeaterNode.InnerHtml = repeatedContent.ToString();
 
             var repeatedNodes = repeaterNode.ChildNodes;
-
             var parent = repeaterNode.ParentNode;
 
             repeaterNode.Remove();
 
-            for (int i = 0; i < repeatedNodes.Count; i++)
+            foreach (var node in repeatedNodes)
             {
-                parent.AppendChild(repeatedNodes[i]);
+                parent.AppendChild(node);
             }
         }
-
     }
 }
