@@ -6,76 +6,68 @@ namespace Hackathon2024
     using System.IO;
     using System.Linq;
     using System.Text;
-    using System.Text.RegularExpressions;
-    using Data = System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, object>[]>;
 
-
-    public struct KnownExpressions
-    {
-        public const string ItemValue = "itemValue";
-        public const string Resource = "resource";
-    }
-
-    /// <summary>
-    /// ExpressionTransformer for Parsing Selligent specific expressions '[% %]'
-    /// </summary>
     public class ExpressionTransformer
     {
-        private static readonly Regex ExpressionDetector =
-            new Regex(@"\[%(?<expression>.*?)%\]",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
-        private static readonly Regex ItemValueFieldDetector =
-            new Regex(@"itemValue\('(?<field>.*?)'\)",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
-        private static readonly Regex ResourceFieldDetector =
-            new Regex(@"resource\('(?<resource>.*?)'\)",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
             if (string.IsNullOrEmpty(content))
                 return content;
 
             var result = new StringBuilder(content.Length);
+            int currentIndex = 0;
 
-            int lastMatchIndex = 0;
-
-            foreach (Match expressionMatch in ExpressionDetector.Matches(content))
+            while (currentIndex < content.Length)
             {
-                result.Append(content, lastMatchIndex, expressionMatch.Index - lastMatchIndex);
-
-                var expression = expressionMatch.Groups["expression"].Value;
-
-                expression = ItemValueFieldDetector.Replace(expression, expressionMatch =>
+                int expressionStartIndex = content.IndexOf("[%", currentIndex);
+                if (expressionStartIndex == -1)
                 {
-                    var field = expressionMatch.Groups["field"].Value;
-                    var value = (data != null && data.TryGetValue(field, out var val)) ? val : "";
-                    return value.ToString();
-                });
+                    result.Append(content, currentIndex, content.Length - currentIndex);
+                    break;
+                }
 
-                expression = ResourceFieldDetector.Replace(expression, expressionMatch =>
+                int expressionEndIndex = content.IndexOf("%]", expressionStartIndex);
+                if (expressionEndIndex == -1)
                 {
-                    var resource = expressionMatch.Groups["resource"].Value;
-                    return $"{baseUrl}{resource}";
-                });
+                    result.Append(content, currentIndex, content.Length - currentIndex);
+                    break;
+                }
 
-                result.Append(expression);
+                result.Append(content, currentIndex, expressionStartIndex - currentIndex);
 
-                lastMatchIndex = expressionMatch.Index + expressionMatch.Length;
+                var expression = content.Substring(expressionStartIndex + 2, expressionEndIndex - expressionStartIndex - 2);
+                result.Append(ProcessExpression(expression, baseUrl, data));
+
+                currentIndex = expressionEndIndex + 2;
             }
 
-            if (lastMatchIndex < content.Length)
-                result.Append(content, lastMatchIndex, content.Length - lastMatchIndex);
-
             return result.ToString();
+        }
+
+        private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
+        {
+            if (expression.StartsWith("itemValue('") && expression.EndsWith("')"))
+            {
+                var field = expression.Substring(11, expression.Length - 13);
+                if (data != null && data.TryGetValue(field, out var value))
+                {
+                    return value?.ToString() ?? "";
+                }
+                return "";
+            }
+            else if (expression.StartsWith("resource('") && expression.EndsWith("')"))
+            {
+                var resource = expression.Substring(10, expression.Length - 12);
+                return baseUrl + resource;
+            }
+
+            return "";
         }
     }
 
     public class TemplateRenderer
     {
-        public void RenderTemplate(TextReader template, TextWriter output, Data allData)
+        public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
         {
             var document = new HtmlDocument();
             document.Load(template);
@@ -140,4 +132,3 @@ namespace Hackathon2024
         }
     }
 }
-
