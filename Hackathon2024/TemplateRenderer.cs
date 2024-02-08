@@ -20,43 +20,78 @@ namespace Hackathon2024
     /// ExpressionTransformer for Parsing Selligent specific expressions '[% %]'
     /// </summary>
     public class ExpressionTransformer
+{
+    private const string ExpressionPattern = @"\[%(?<expression>.*?)%\]";
+    private const string ItemValueFieldPattern = @"itemValue\('(?<field>.*?)'\)";
+    private const string ResourceFieldPattern = @"resource\('(?<resource>.*?)'\)";
+
+    public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
     {
-        private static readonly Regex ExpressionDetector =
-            new Regex(@"\[%(?<expression>.*?)%\]",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
-        private static readonly Regex ItemValueFieldDetector =
-            new Regex(@"itemValue\('(?<field>.*?)'\)",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
-        private static readonly Regex ResourceFieldDetector =
-            new Regex(@"resource\('(?<resource>.*?)'\)",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
-        public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
+        // Optimize regular expression compilation and string manipulation
+        StringBuilder resultBuilder = new StringBuilder(content.Length);
+        int prevIndex = 0;
+        foreach (Match expressionMatch in Regex.Matches(content, ExpressionPattern))
         {
-            return ExpressionDetector.Replace(content, expressionMatch =>
-            {
-                var expression = expressionMatch.Groups["expression"].Value;
+            resultBuilder.Append(content, prevIndex, expressionMatch.Index - prevIndex);
+            prevIndex = expressionMatch.Index + expressionMatch.Length;
 
-                expression = ItemValueFieldDetector.Replace(expression, expressionMatch =>
-                {
-                    var field = expressionMatch.Groups["field"].Value;
-
-                    return (data[field] ?? "").ToString();
-                });
-
-                expression = ResourceFieldDetector.Replace(expression, expressionMatch =>
-                {
-                    var resource = expressionMatch.Groups["resource"].Value;
-
-                    return $"{baseUrl}{resource}";
-                });
-
-                return expression;
-            });
+            string expression = expressionMatch.Groups["expression"].Value;
+            expression = ReplaceItemValueFields(expression, data);
+            expression = ReplaceResourceFields(expression, baseUrl);
+            resultBuilder.Append(expression);
         }
+        resultBuilder.Append(content, prevIndex, content.Length - prevIndex);
+
+        return resultBuilder.ToString();
     }
+
+    private static string ReplaceItemValueFields(string expression, Dictionary<string, object> data)
+    {
+        // Optimize item value field replacement
+        int startIndex = 0;
+        while (true)
+        {
+            int matchIndex = expression.IndexOf("itemValue('", startIndex);
+            if (matchIndex == -1)
+                break;
+
+            int endIndex = expression.IndexOf("')", matchIndex + 11);
+            if (endIndex == -1)
+                break;
+
+            string field = expression.Substring(matchIndex + 11, endIndex - matchIndex - 11);
+            if (data != null && data.TryGetValue(field, out object value))
+                expression = expression.Remove(matchIndex, endIndex - matchIndex + 2).Insert(matchIndex, value.ToString());
+
+            startIndex = matchIndex + 1;
+        }
+
+        return expression;
+    }
+
+    private static string ReplaceResourceFields(string expression, string baseUrl)
+    {
+        // Optimize resource field replacement
+        int startIndex = 0;
+        while (true)
+        {
+            int matchIndex = expression.IndexOf("resource('", startIndex);
+            if (matchIndex == -1)
+                break;
+
+            int endIndex = expression.IndexOf("')", matchIndex + 10);
+            if (endIndex == -1)
+                break;
+
+            string resource = expression.Substring(matchIndex + 10, endIndex - matchIndex - 10);
+            expression = expression.Remove(matchIndex, endIndex - matchIndex + 2).Insert(matchIndex, $"{baseUrl}{resource}");
+
+            startIndex = matchIndex + 1;
+        }
+
+        return expression;
+    }
+}
 
     public class TemplateRenderer
     {
