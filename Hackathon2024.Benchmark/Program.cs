@@ -1,4 +1,6 @@
-﻿namespace Hackathon2024.Benchmark
+﻿using System.Text;
+
+namespace Hackathon2024.Benchmark
 {
     using Azure.Storage.Blobs;
     using BenchmarkDotNet.Attributes;
@@ -40,18 +42,29 @@
         {
             var summary = BenchmarkRunner.Run<HackathonBenchmark>();
 
-            using var reportJson = File.OpenRead("BenchmarkDotNet.Artifacts/results/Hackathon2024.Benchmark.HackathonBenchmark-report.json");
+            await using var reportJson = File.OpenRead("BenchmarkDotNet.Artifacts/results/Hackathon2024.Benchmark.HackathonBenchmark-report.json");
             var report = JsonSerializer.Deserialize<BenchmarkReport>(reportJson);
 
             if (report.Benchmarks.Length == 0)
             {
-                Console.Error.WriteLine("No benchmarks detected");
+                await Console.Error.WriteLineAsync("No benchmarks detected");
                 return;
             }
 
             if (args.Length == 2)
             {
-                var team = new Regex("[^a-zA-Z0-9_-]").Replace(args[0], "");
+                string input = args[0];
+                StringBuilder sanitizedTeamName = new(input.Length);
+
+                foreach (char character in input)
+                {
+                    if (char.IsLetterOrDigit(character) || character == '_' || character == '-')
+                    {
+                        sanitizedTeamName.Append(character);
+                    }
+                }
+
+                string team = sanitizedTeamName.ToString();
                 var result = report.Benchmarks[0].Statistics.Percentiles.P95;
 
                 var teamData = JsonSerializer.Serialize(
