@@ -34,8 +34,9 @@ namespace Hackathon2024
 
             MatchCollection matches = ExpressionDetector.Matches(content);
             int prevIndex = 0;
-            foreach (Match expressionMatch in matches)
+            for (int i = 0; i < matches.Count; i++)
             {
+                Match expressionMatch = matches[i];
                 resultBuilder.Append(content, prevIndex, expressionMatch.Index - prevIndex);
                 prevIndex = expressionMatch.Index + expressionMatch.Length;
                 string expression = expressionMatch.Groups["expression"].Value;
@@ -96,11 +97,13 @@ namespace Hackathon2024
             var baseUrl = GetBaseUrl(allData);
 
             HtmlNode[] repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']")?.ToArray() ?? Array.Empty<HtmlNode>();
-            foreach (HtmlNode repeaterNode in repeaterNodes)
+            for (int i = 0; i < repeaterNodes.Length; i++)
             {
+                var repeaterNode = repeaterNodes[i];
                 HtmlNode[] repeaterItemNodes = repeaterNode.SelectNodes(".//*[name()='sg:repeateritem']")?.ToArray() ?? Array.Empty<HtmlNode>();
-                foreach (HtmlNode repeaterItemNode in repeaterItemNodes)
+                for (int j = 0; j < repeaterItemNodes.Length; j++)
                 {
+                    var repeaterItemNode = repeaterItemNodes[j];
                     string dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
                     string repeaterItemContent = repeaterItemNode.InnerHtml;
                     StringBuilder repeatedContent = new StringBuilder();
@@ -114,8 +117,9 @@ namespace Hackathon2024
             }
 
             HtmlNode[] imageNodes = document.DocumentNode.SelectNodes("//img")?.ToArray() ?? Array.Empty<HtmlNode>();
-            foreach (HtmlNode imageNode in imageNodes)
+            for (int k = 0; k < imageNodes.Length; k++)
             {
+                var imageNode = imageNodes[k];
                 string srcAttributeValue = imageNode.GetAttributeValue("src", "");
                 string result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
                 imageNode.SetAttributeValue("src", result);
@@ -144,8 +148,9 @@ namespace Hackathon2024
             HtmlNode parent = repeaterNode.ParentNode;
             repeaterNode.Remove();
 
-            foreach (HtmlNode child in repeatedNodes)
+            for (int i = 0; i < repeatedNodes.Length; i++)
             {
+                var child = repeatedNodes[i];
                 parent.AppendChild(child);
             }
         }
