@@ -25,20 +25,21 @@ namespace Hackathon2024
                 int expressionStartIndex = content.IndexOf(expressionStartMarker, currentIndex);
                 if (expressionStartIndex == -1)
                 {
-                    result.Append(content.Substring(currentIndex));
+                    result.Append(content, currentIndex, content.Length - currentIndex);
                     break;
                 }
 
                 int expressionEndIndex = content.IndexOf(expressionEndMarker, expressionStartIndex);
                 if (expressionEndIndex == -1)
                 {
-                    result.Append(content.Substring(currentIndex));
+                    result.Append(content, currentIndex, content.Length - currentIndex);
                     break;
                 }
 
-                result.Append(content.Substring(currentIndex, expressionStartIndex - currentIndex));
+                result.Append(content, currentIndex, expressionStartIndex - currentIndex);
 
-                string expression = content.Substring(expressionStartIndex + expressionStartMarker.Length, expressionEndIndex - expressionStartIndex - expressionEndMarker.Length);
+                int expressionLength = expressionEndIndex - (expressionStartIndex + expressionStartMarker.Length);
+                string expression = content.Substring(expressionStartIndex + expressionStartMarker.Length, expressionLength);
                 result.Append(ProcessExpression(expression, baseUrl, data));
 
                 currentIndex = expressionEndIndex + expressionEndMarker.Length;
