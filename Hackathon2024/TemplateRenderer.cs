@@ -102,19 +102,16 @@ namespace Hackathon2024
             var baseUrl = GetBaseUrl(allData);
 
             HtmlNode[] repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']")?.ToArray() ?? Array.Empty<HtmlNode>();
-            for (int i = 0; i < repeaterNodes.Length; i++)
+            foreach (var repeaterNode in repeaterNodes)
             {
-                var repeaterNode = repeaterNodes[i];
                 HtmlNode[] repeaterItemNodes = repeaterNode.SelectNodes(".//*[name()='sg:repeateritem']")?.ToArray() ?? Array.Empty<HtmlNode>();
-                for (int j = 0; j < repeaterItemNodes.Length; j++)
+                foreach (var repeaterItemNode in repeaterItemNodes)
                 {
-                    var repeaterItemNode = repeaterItemNodes[j];
                     string dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
                     string repeaterItemContent = repeaterItemNode.InnerHtml;
                     StringBuilder repeatedContent = new StringBuilder();
-                    for (int k = 0; k < allData[dataSelection].Length; k++)
+                    foreach (var dataItem in allData[dataSelection])
                     {
-                        var dataItem = allData[dataSelection][k];
                         string result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
                         repeatedContent.Append(result);
                     }
@@ -123,9 +120,8 @@ namespace Hackathon2024
             }
 
             HtmlNode[] imageNodes = document.DocumentNode.SelectNodes("//img")?.ToArray() ?? Array.Empty<HtmlNode>();
-            for (int i = 0; i < imageNodes.Length; i++)
+            foreach (var imageNode in imageNodes)
             {
-                var imageNode = imageNodes[i];
                 string srcAttributeValue = imageNode.GetAttributeValue("src", "");
                 string result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
                 imageNode.SetAttributeValue("src", result);
@@ -136,9 +132,8 @@ namespace Hackathon2024
 
         private static string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
         {
-            for (int i = 0; i < allData["variables"].Length; i++)
+            foreach (var dataItem in allData["variables"])
             {
-                var dataItem = allData["variables"][i];
                 if (dataItem.TryGetValue("name", out object name) && "baseurl".Equals(name.ToString()))
                 {
                     return dataItem["value"]?.ToString() ?? "";
@@ -155,9 +150,8 @@ namespace Hackathon2024
             HtmlNode parent = repeaterNode.ParentNode;
             repeaterNode.Remove();
 
-            for (int i = 0; i < repeatedNodes.Length; i++)
+            foreach (var child in repeatedNodes)
             {
-                var child = repeatedNodes[i];
                 parent.AppendChild(child);
             }
         }
