@@ -16,64 +16,105 @@ namespace Hackathon2024
     /// <summary>
     /// ExpressionTransformer for Parsing Selligent specific expressions '[% %]'
     /// </summary>
-    public class ExpressionTransformer
+    public static class ExpressionTransformer
     {
-        private const string ExpressionPattern = @"\[%(?<expression>.*?)%\]";
-        private const string ItemValueFieldPattern = @"itemValue\('(?<field>.*?)'\)";
-        private const string ResourceFieldPattern = @"resource\('(?<resource>.*?)'\)";
+        //private const string ExpressionPattern = @"\[%(?<expression>.*?)%\]";
+        //private const string ItemValueFieldPattern = @"itemValue\('(?<field>.*?)'\)";
+        //private const string ResourceFieldPattern = @"resource\('(?<resource>.*?)'\)";
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
-            // Optimize regular expression compilation and string manipulation
-            StringBuilder resultBuilder = new StringBuilder(content.Length);
+            // Optimize string manipulation
+            StringBuilder resultBuilder = new(content.Length);
             int prevIndex = 0;
-            MatchCollection matches = Regex.Matches(content, ExpressionPattern);
-            for (int i = 0; i < matches.Count; i++)
+            int startIndex = content.IndexOf("[%", prevIndex, StringComparison.Ordinal);
+            while (startIndex != -1)
             {
-                Match expressionMatch = matches[i];
-                resultBuilder.Append(content, prevIndex, expressionMatch.Index - prevIndex);
-                prevIndex = expressionMatch.Index + expressionMatch.Length;
-                string expression = expressionMatch.Groups["expression"].Value;
+                int endIndex = content.IndexOf("%]", startIndex, StringComparison.Ordinal);
+                if (endIndex == -1)
+                {
+                    // If no closing tag found, break the loop
+                    break;
+                }
+                // Append content before the matched expression
+                resultBuilder.Append(content, prevIndex, startIndex - prevIndex);
+                // Extract expression and perform replacements
+                string expression = content.Substring(startIndex + 2, endIndex - startIndex - 2);
                 expression = ReplaceItemValueFields(expression, data);
                 expression = ReplaceResourceFields(expression, baseUrl);
                 resultBuilder.Append(expression);
+                // Update previous index
+                prevIndex = endIndex + 2;
+                // Find next start index
+                startIndex = content.IndexOf("[%", prevIndex, StringComparison.Ordinal);
             }
+            // Append remaining content after the last matched expression
             resultBuilder.Append(content, prevIndex, content.Length - prevIndex);
+            // Return the resulting string
             return resultBuilder.ToString();
         }
         private static string ReplaceItemValueFields(string expression, Dictionary<string, object> data)
         {
-            // Optimize item value field replacement
             int startIndex = 0;
+            int expressionLength = expression.Length;
             while (true)
             {
-                int matchIndex = expression.IndexOf("itemValue('", startIndex);
+                int matchIndex = expression.IndexOf("itemValue('", startIndex, StringComparison.Ordinal);
                 if (matchIndex == -1)
                     break;
-                int endIndex = expression.IndexOf("')", matchIndex + 11);
-                if (endIndex == -1)
+                int fieldStartIndex = matchIndex + 11;
+                int fieldEndIndex = expression.IndexOf("')", fieldStartIndex, StringComparison.Ordinal);
+                if (fieldEndIndex == -1)
                     break;
-                string field = expression.Substring(matchIndex + 11, endIndex - matchIndex - 11);
+                string field = expression[fieldStartIndex..fieldEndIndex];
                 if (data != null && data.TryGetValue(field, out object value))
-                    expression = expression.Remove(matchIndex, endIndex - matchIndex + 2).Insert(matchIndex, value.ToString());
-                startIndex = matchIndex + 1;
+                {
+                    // Calculate the length of the resulting string after replacement
+                    if (value != null)
+                    {
+                        int valueLength = value.ToString()!.Length;
+                        int replaceLength = fieldEndIndex - matchIndex + 2;
+                        // Replace the matched substring directly within the existing string
+                        expression = expression.Remove(matchIndex, replaceLength)
+                            .Insert(matchIndex, value.ToString() ?? throw new InvalidOperationException());
+                        // Update the startIndex for the next search
+                        startIndex = matchIndex + valueLength;
+                    }
+                }
+                else
+                {
+                    // If the field is not found in the dictionary, move to the next character
+                    startIndex = fieldEndIndex + 2;
+                }
+                // Ensure startIndex stays within bounds
+                if (startIndex >= expressionLength)
+                    break;
             }
             return expression;
         }
         private static string ReplaceResourceFields(string expression, string baseUrl)
         {
-            // Optimize resource field replacement
             int startIndex = 0;
+            int expressionLength = expression.Length;
             while (true)
             {
-                int matchIndex = expression.IndexOf("resource('", startIndex);
+                int matchIndex = expression.IndexOf("resource('", startIndex, StringComparison.Ordinal);
                 if (matchIndex == -1)
                     break;
-                int endIndex = expression.IndexOf("')", matchIndex + 10);
-                if (endIndex == -1)
+                int resourceStartIndex = matchIndex + 10;
+                int resourceEndIndex = expression.IndexOf("')", resourceStartIndex, StringComparison.Ordinal);
+                if (resourceEndIndex == -1)
                     break;
-                string resource = expression.Substring(matchIndex + 10, endIndex - matchIndex - 10);
-                expression = expression.Remove(matchIndex, endIndex - matchIndex + 2).Insert(matchIndex, $"{baseUrl}{resource}");
-                startIndex = matchIndex + 1;
+                string resource = expression[resourceStartIndex..resourceEndIndex];
+                // Calculate the length of the resulting string after replacement
+                int replaceLength = resourceEndIndex - matchIndex + 2;
+                // Replace the matched substring directly within the existing string
+                expression = expression.Remove(matchIndex, replaceLength)
+                    .Insert(matchIndex, $"{baseUrl}{resource}");
+                // Update the startIndex for the next search
+                startIndex = matchIndex + baseUrl.Length + resource.Length;
+                // Ensure startIndex stays within bounds
+                if (startIndex >= expressionLength)
+                    break;
             }
             return expression;
         }
@@ -91,10 +132,12 @@ namespace Hackathon2024
                 .Select(x =>
                     x["value"]?.ToString() ?? "")
                 .FirstOrDefault();
-            HtmlNode[] repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']")?.ToArray() ?? Array.Empty<HtmlNode>();
+            HtmlNode[] repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']")?.ToArray() ??
+                                       Array.Empty<HtmlNode>();
             foreach (var repeaterNode in repeaterNodes)
             {
-                HtmlNode[] repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']")?.ToArray() ?? Array.Empty<HtmlNode>();
+                HtmlNode[] repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']")?.ToArray() ??
+                                               Array.Empty<HtmlNode>();
                 foreach (var repeaterItemNode in repeaterItemNodes)
                 {
                     var dataSelection = repeaterNode.Attributes["dataselection"].Value;
@@ -120,7 +163,7 @@ namespace Hackathon2024
         private static void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
         {
             repeaterNode.InnerHtml = repeatedContent.ToString();
-            var repeatedNodes = repeaterNode.ChildNodes.ToArray();
+            var repeatedNodes = repeaterNode.ChildNodes;
             var parent = repeaterNode.ParentNode;
             repeaterNode.Remove();
             foreach (var child in repeatedNodes)
@@ -130,3 +173,10 @@ namespace Hackathon2024
         }
     }
 }
+
+
+
+
+
+
+
