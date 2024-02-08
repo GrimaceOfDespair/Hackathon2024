@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace Hackathon2024
 {
@@ -16,35 +15,31 @@ namespace Hackathon2024
 
     public class ExpressionTransformer
     {
-        private static readonly Regex ExpressionDetector =
-            new Regex(@"\[%(?<expression>.*?)%\]",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
-        private static readonly Regex ItemValueFieldDetector =
-            new Regex(@"itemValue\('(?<field>.*?)'\)",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
-        private static readonly Regex ResourceFieldDetector =
-            new Regex(@"resource\('(?<resource>.*?)'\)",
-            RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled, TimeSpan.FromSeconds(15));
-
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
             StringBuilder resultBuilder = new StringBuilder(content.Length);
 
-            MatchCollection matches = ExpressionDetector.Matches(content);
-            int prevIndex = 0;
-            for (int i = 0; i < matches.Count; i++)
+            int startIndex = 0;
+            while (true)
             {
-                Match expressionMatch = matches[i];
-                resultBuilder.Append(content, prevIndex, expressionMatch.Index - prevIndex);
-                prevIndex = expressionMatch.Index + expressionMatch.Length;
-                string expression = expressionMatch.Groups["expression"].Value;
+                int expressionStartIndex = content.IndexOf("[%", startIndex);
+                if (expressionStartIndex == -1)
+                    break;
+
+                int expressionEndIndex = content.IndexOf("%]", expressionStartIndex);
+                if (expressionEndIndex == -1)
+                    break;
+
+                resultBuilder.Append(content, startIndex, expressionStartIndex - startIndex);
+
+                string expression = content.Substring(expressionStartIndex + 2, expressionEndIndex - expressionStartIndex - 2);
                 expression = ReplaceItemValueFields(expression, data);
                 expression = ReplaceResourceFields(expression, baseUrl);
                 resultBuilder.Append(expression);
+
+                startIndex = expressionEndIndex + 2;
             }
-            resultBuilder.Append(content, prevIndex, content.Length - prevIndex);
+            resultBuilder.Append(content, startIndex, content.Length - startIndex);
 
             return resultBuilder.ToString();
         }
@@ -54,18 +49,23 @@ namespace Hackathon2024
             int startIndex = 0;
             while (true)
             {
-                Match match = ItemValueFieldDetector.Match(expression, startIndex);
-                if (!match.Success)
+                int fieldStartIndex = expression.IndexOf("itemValue('", startIndex);
+                if (fieldStartIndex == -1)
                     break;
-                string field = match.Groups["field"].Value;
+
+                int fieldEndIndex = expression.IndexOf("')", fieldStartIndex);
+                if (fieldEndIndex == -1)
+                    break;
+
+                string field = expression.Substring(fieldStartIndex + 11, fieldEndIndex - fieldStartIndex - 11);
                 if (data != null && data.TryGetValue(field, out object value))
                 {
-                    expression = expression.Remove(match.Index, match.Length).Insert(match.Index, value.ToString());
-                    startIndex = match.Index + value.ToString().Length;
+                    expression = expression.Remove(fieldStartIndex, fieldEndIndex - fieldStartIndex + 2).Insert(fieldStartIndex, value.ToString());
+                    startIndex = fieldStartIndex + value.ToString().Length;
                 }
                 else
                 {
-                    startIndex = match.Index + match.Length;
+                    startIndex = fieldEndIndex + 2;
                 }
             }
             return expression;
@@ -76,12 +76,17 @@ namespace Hackathon2024
             int startIndex = 0;
             while (true)
             {
-                Match match = ResourceFieldDetector.Match(expression, startIndex);
-                if (!match.Success)
+                int resourceStartIndex = expression.IndexOf("resource('", startIndex);
+                if (resourceStartIndex == -1)
                     break;
-                string resource = match.Groups["resource"].Value;
-                expression = expression.Remove(match.Index, match.Length).Insert(match.Index, $"{baseUrl}{resource}");
-                startIndex = match.Index + baseUrl.Length + resource.Length;
+
+                int resourceEndIndex = expression.IndexOf("')", resourceStartIndex);
+                if (resourceEndIndex == -1)
+                    break;
+
+                string resource = expression.Substring(resourceStartIndex + 10, resourceEndIndex - resourceStartIndex - 10);
+                expression = expression.Remove(resourceStartIndex, resourceEndIndex - resourceStartIndex + 2).Insert(resourceStartIndex, $"{baseUrl}{resource}");
+                startIndex = resourceStartIndex + baseUrl.Length + resource.Length;
             }
             return expression;
         }
@@ -97,13 +102,11 @@ namespace Hackathon2024
             var baseUrl = GetBaseUrl(allData);
 
             HtmlNode[] repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']")?.ToArray() ?? Array.Empty<HtmlNode>();
-            for (int i = 0; i < repeaterNodes.Length; i++)
+            foreach (var repeaterNode in repeaterNodes)
             {
-                var repeaterNode = repeaterNodes[i];
                 HtmlNode[] repeaterItemNodes = repeaterNode.SelectNodes(".//*[name()='sg:repeateritem']")?.ToArray() ?? Array.Empty<HtmlNode>();
-                for (int j = 0; j < repeaterItemNodes.Length; j++)
+                foreach (var repeaterItemNode in repeaterItemNodes)
                 {
-                    var repeaterItemNode = repeaterItemNodes[j];
                     string dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
                     string repeaterItemContent = repeaterItemNode.InnerHtml;
                     StringBuilder repeatedContent = new StringBuilder();
@@ -117,9 +120,8 @@ namespace Hackathon2024
             }
 
             HtmlNode[] imageNodes = document.DocumentNode.SelectNodes("//img")?.ToArray() ?? Array.Empty<HtmlNode>();
-            for (int k = 0; k < imageNodes.Length; k++)
+            foreach (var imageNode in imageNodes)
             {
-                var imageNode = imageNodes[k];
                 string srcAttributeValue = imageNode.GetAttributeValue("src", "");
                 string result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
                 imageNode.SetAttributeValue("src", result);
@@ -148,9 +150,8 @@ namespace Hackathon2024
             HtmlNode parent = repeaterNode.ParentNode;
             repeaterNode.Remove();
 
-            for (int i = 0; i < repeatedNodes.Length; i++)
+            foreach (var child in repeatedNodes)
             {
-                var child = repeatedNodes[i];
                 parent.AppendChild(child);
             }
         }
