@@ -18,15 +18,16 @@ namespace Hackathon2024
     /// </summary>
     public class ExpressionTransformer
     {
-        private const string ExpressionPattern = @"\[%(?<expression>.*?)%\]";
-        private const string ItemValueFieldPattern = @"itemValue\('(?<field>.*?)'\)";
-        private const string ResourceFieldPattern = @"resource\('(?<resource>.*?)'\)";
+        private static readonly Regex ExpressionRegex = new Regex(@"\[% (?<expression>.*?) %\]", RegexOptions.Compiled);
+        private static readonly Regex ItemValueRegex = new Regex(@"itemValue\('(?<field>.*?)'\)", RegexOptions.Compiled);
+        private static readonly Regex ResourceRegex = new Regex(@"resource\('(?<resource>.*?)'\)", RegexOptions.Compiled);
+
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
         {
-            // Optimize regular expression compilation and string manipulation
-            StringBuilder resultBuilder = new StringBuilder(content.Length);
+            StringBuilder resultBuilder = new StringBuilder(content.Length + 100); // Set initial capacity
+
             int prevIndex = 0;
-            foreach (Match expressionMatch in Regex.Matches(content, ExpressionPattern))
+            foreach (Match expressionMatch in ExpressionRegex.Matches(content))
             {
                 resultBuilder.Append(content, prevIndex, expressionMatch.Index - prevIndex);
                 prevIndex = expressionMatch.Index + expressionMatch.Length;
@@ -38,44 +39,33 @@ namespace Hackathon2024
             resultBuilder.Append(content, prevIndex, content.Length - prevIndex);
             return resultBuilder.ToString();
         }
+
         private static string ReplaceItemValueFields(string expression, Dictionary<string, object> data)
         {
-            // Optimize item value field replacement
-            int startIndex = 0;
-            while (true)
+            return ItemValueRegex.Replace(expression, match =>
             {
-                int matchIndex = expression.IndexOf("itemValue('", startIndex);
-                if (matchIndex == -1)
-                    break;
-                int endIndex = expression.IndexOf("')", matchIndex + 11);
-                if (endIndex == -1)
-                    break;
-                string field = expression.Substring(matchIndex + 11, endIndex - matchIndex - 11);
+                string field = match.Groups["field"].Value;
                 if (data != null && data.TryGetValue(field, out object value))
-                    expression = expression.Remove(matchIndex, endIndex - matchIndex + 2).Insert(matchIndex, value.ToString());
-                startIndex = matchIndex + 1;
-            }
-            return expression;
+                {
+                    // Ensure that the value is not null before converting to string
+                    return value?.ToString() ?? "";
+                }
+                return match.Value;
+            });
         }
+
+
         private static string ReplaceResourceFields(string expression, string baseUrl)
         {
-            // Optimize resource field replacement
-            int startIndex = 0;
-            while (true)
+            return ResourceRegex.Replace(expression, match =>
             {
-                int matchIndex = expression.IndexOf("resource('", startIndex);
-                if (matchIndex == -1)
-                    break;
-                int endIndex = expression.IndexOf("')", matchIndex + 10);
-                if (endIndex == -1)
-                    break;
-                string resource = expression.Substring(matchIndex + 10, endIndex - matchIndex - 10);
-                expression = expression.Remove(matchIndex, endIndex - matchIndex + 2).Insert(matchIndex, $"{baseUrl}{resource}");
-                startIndex = matchIndex + 1;
-            }
-            return expression;
+                string resource = match.Groups["resource"].Value;
+                return $"{baseUrl}/{resource}"; // Properly concatenate baseUrl and resource
+            });
         }
+
     }
+
     public class TemplateRenderer
     {
         public void RenderTemplate(TextReader template, TextWriter output, Data allData)
@@ -83,19 +73,18 @@ namespace Hackathon2024
             var document = new HtmlDocument();
             document.Load(template);
             var baseUrl = allData["variables"]
-                .Where(x =>
-                    x.TryGetValue("name", out object name) &&
-                    "baseurl".Equals(name.ToString()))
-                .Select(x =>
-                    x["value"]?.ToString() ?? "")
+                .OfType<Dictionary<string, object>>()
+                .Where(x => x.TryGetValue("name", out object name) && "baseurl".Equals(name.ToString()))
+                .Select(x => x["value"]?.ToString())
                 .FirstOrDefault();
-            HtmlNode[] repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']")?.ToArray() ?? Array.Empty<HtmlNode>();
+
+            var repeaterNodes = document.DocumentNode.Descendants("sg:repeater").ToArray();
             foreach (var repeaterNode in repeaterNodes)
             {
-                HtmlNode[] repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']")?.ToArray() ?? Array.Empty<HtmlNode>();
+                var repeaterItemNodes = repeaterNode.Descendants("sg:repeateritem").ToArray();
                 foreach (var repeaterItemNode in repeaterItemNodes)
                 {
-                    var dataSelection = repeaterNode.Attributes["dataselection"].Value;
+                    var dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
                     var repeaterItemContent = repeaterItemNode.InnerHtml;
                     var repeatedContent = new StringBuilder();
                     foreach (var dataItem in allData[dataSelection])
@@ -106,19 +95,22 @@ namespace Hackathon2024
                     ReplaceHtml(repeaterNode, repeatedContent);
                 }
             }
-            HtmlNode[] imageNodes = document.DocumentNode.SelectNodes("//img")?.ToArray() ?? Array.Empty<HtmlNode>();
+
+            var imageNodes = document.DocumentNode.Descendants("img").ToArray();
             foreach (var imageNode in imageNodes)
             {
-                var srcAttributeValue = imageNode.Attributes["src"].Value;
+                var srcAttributeValue = imageNode.GetAttributeValue("src", "");
                 var result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
-                imageNode.Attributes["src"].Value = result;
+                imageNode.SetAttributeValue("src", result);
             }
-            document.DocumentNode.WriteTo(output);
+
+            document.Save(output);
         }
+
         private static void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
         {
             repeaterNode.InnerHtml = repeatedContent.ToString();
-            var repeatedNodes = repeaterNode.ChildNodes;
+            var repeatedNodes = repeaterNode.ChildNodes.ToArray();
             var parent = repeaterNode.ParentNode;
             repeaterNode.Remove();
             foreach (var child in repeatedNodes)
@@ -127,4 +119,5 @@ namespace Hackathon2024
             }
         }
     }
+
 }
