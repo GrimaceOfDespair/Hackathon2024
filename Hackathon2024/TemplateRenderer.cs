@@ -3,46 +3,31 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 
 public static class ExpressionTransformer
 {
+    private static readonly Regex ExpressionPattern = new Regex(@"\[%(.+?)%\]", RegexOptions.Compiled);
+
     public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
     {
         if (string.IsNullOrEmpty(content))
             return content;
 
+        MatchCollection matches = ExpressionPattern.Matches(content);
         StringBuilder result = new StringBuilder(content.Length);
-        int currentIndex = 0;
-        int contentLength = content.Length;
-        int startTagLength = 2; // Length of start tag [%.
-        int endTagLength = 2; // Length of end tag %].
+        int lastIndex = 0;
 
-        while (currentIndex < contentLength)
+        foreach (Match match in matches)
         {
-            int expressionStartIndex = content.IndexOf("[%", currentIndex, StringComparison.Ordinal);
-            if (expressionStartIndex == -1)
-            {
-                result.Append(content, currentIndex, contentLength - currentIndex);
-                break;
-            }
-
-            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
-
-            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + startTagLength, StringComparison.Ordinal);
-            if (expressionEndIndex == -1)
-            {
-                result.Append(content, expressionStartIndex, contentLength - expressionStartIndex);
-                break;
-            }
-
-            string expression = content.Substring(expressionStartIndex + startTagLength, expressionEndIndex - expressionStartIndex - startTagLength);
+            result.Append(content, lastIndex, match.Index - lastIndex);
+            string expression = match.Groups[1].Value;
             string processedExpression = ProcessExpression(expression, baseUrl, data);
-
             result.Append(processedExpression);
-
-            currentIndex = expressionEndIndex + endTagLength;
+            lastIndex = match.Index + match.Length;
         }
 
+        result.Append(content, lastIndex, content.Length - lastIndex);
         return result.ToString();
     }
 
