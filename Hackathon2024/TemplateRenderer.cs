@@ -4,30 +4,47 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 
 public static class ExpressionTransformer
 {
-    private static readonly Regex ExpressionPattern = new Regex(@"\[%(.+?)%\]", RegexOptions.Compiled);
-
     public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
     {
         if (string.IsNullOrEmpty(content))
             return content;
 
-        var result = new StringBuilder(content.Length);
-        int lastIndex = 0;
+        StringBuilder result = new StringBuilder(content.Length);
+        result.EnsureCapacity(content.Length);
 
-        foreach (Match match in ExpressionPattern.Matches(content))
+        int currentIndex = 0;
+        int contentLength = content.Length;
+
+        while (currentIndex < contentLength)
         {
-            result.Append(content, lastIndex, match.Index - lastIndex);
-            string expression = match.Groups[1].Value;
+            int expressionStartIndex = content.IndexOf("[%", currentIndex);
+            if (expressionStartIndex == -1)
+            {
+                result.Append(content, currentIndex, contentLength - currentIndex);
+                break;
+            }
+
+            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
+
+            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2);
+            if (expressionEndIndex == -1)
+            {
+                result.Append(content, expressionStartIndex, contentLength - expressionStartIndex);
+                break;
+            }
+
+            int expressionLength = expressionEndIndex - expressionStartIndex - 2;
+            string expression = content.Substring(expressionStartIndex + 2, expressionLength);
             string processedExpression = ProcessExpression(expression, baseUrl, data);
+
             result.Append(processedExpression);
-            lastIndex = match.Index + match.Length;
+
+            currentIndex = expressionEndIndex + 2;
         }
 
-        result.Append(content, lastIndex, content.Length - lastIndex);
         return result.ToString();
     }
 
@@ -36,29 +53,22 @@ public static class ExpressionTransformer
         const string ItemValuePrefix = "itemValue('";
         const string ResourcePrefix = "resource('";
 
-        if (IsValidExpression(expression, ItemValuePrefix.Length) && expression.EndsWith("')"))
+        if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith("')"))
         {
             string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2);
-            return GetValueOrDefault(data, field);
+            object value;
+            if (data != null && data.TryGetValue(field, out value))
+                return value?.ToString() ?? "";
         }
-        else if (IsValidExpression(expression, ResourcePrefix.Length) && expression.EndsWith("')"))
+        else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith("')"))
         {
             string resource = expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - 2);
             return baseUrl + resource;
         }
 
-        return string.Empty;
+        return "";
     }
 
-    private static bool IsValidExpression(string expression, int prefixLength)
-    {
-        return expression.Length > (prefixLength + 2) && expression[0] == '\'' && expression[^1] == '%';
-    }
-
-    private static string GetValueOrDefault(Dictionary<string, object> data, string field)
-    {
-        return data?.GetValueOrDefault(field)?.ToString() ?? string.Empty;
-    }
 }
 
 public class TemplateRenderer
