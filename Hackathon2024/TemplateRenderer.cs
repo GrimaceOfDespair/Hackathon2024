@@ -139,8 +139,7 @@ public class TemplateRenderer
         repeaterNode.InnerHtml = repeatedContent.ToString();
         var repeatedNodes = repeaterNode.ChildNodes.ToList();
         var parent = repeaterNode.ParentNode;
-        repeaterNode.Remove();
-
+        
         foreach (var child in repeatedNodes)
         {
             parent.AppendChild(child);
