@@ -1,209 +1,157 @@
+using HtmlAgilityPack;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using HtmlAgilityPack;
 
-namespace Hackathon2024
+public static class ExpressionTransformer
 {
-    public static class ExpressionTransformer
+    public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
     {
-        public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
+        if (string.IsNullOrEmpty(content))
+            return content;
+
+        StringBuilder result = new StringBuilder(content.Length);
+        int currentIndex = 0;
+
+        while (currentIndex < content.Length)
         {
-            var resultBuilder = new StringBuilder(content.Length);
-            int prevIndex = 0;
-            int startIndex = content.IndexOf("[%", StringComparison.Ordinal);
-
-            while (startIndex != -1)
+            int expressionStartIndex = content.IndexOf("[%", currentIndex);
+            if (expressionStartIndex == -1)
             {
-                int endIndex = content.IndexOf("%]", startIndex, StringComparison.Ordinal);
-                if (endIndex == -1)
-                {
-                    // If no closing tag found, break the loop
-                    break;
-                }
-
-                // Append content before the matched expression
-                resultBuilder.Append(content, prevIndex, startIndex - prevIndex);
-
-                // Extract expression and perform replacements
-                string expression = content.Substring(startIndex + 2, endIndex - startIndex - 2);
-                expression = ReplaceItemValueFields(expression, data);
-                expression = ReplaceResourceFields(expression, baseUrl);
-                resultBuilder.Append(expression);
-
-                // Update previous index
-                prevIndex = endIndex + 2;
-
-                // Find next start index
-                startIndex = content.IndexOf("[%", prevIndex, StringComparison.Ordinal);
+                result.Append(content, currentIndex, content.Length - currentIndex);
+                break;
             }
 
-            // Append remaining content after the last matched expression
-            resultBuilder.Append(content, prevIndex, content.Length - prevIndex);
+            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
 
-            // Return the resulting string
-            return resultBuilder.ToString();
+            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2);
+            if (expressionEndIndex == -1)
+            {
+                result.Append(content, expressionStartIndex, content.Length - expressionStartIndex);
+                break;
+            }
+
+            string expression = content.Substring(expressionStartIndex + 2, expressionEndIndex - expressionStartIndex - 2);
+            string processedExpression = ProcessExpression(expression, baseUrl, data);
+
+            result.Append(processedExpression);
+
+            currentIndex = expressionEndIndex + 2;
         }
 
-        private static string ReplaceItemValueFields(string expression, Dictionary<string, object> data)
+        return result.ToString();
+    }
+
+    private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
+    {
+        const string ItemValuePrefix = "itemValue('";
+        const string ItemValueSuffix = "')";
+        const string ResourcePrefix = "resource('";
+        const string ResourceSuffix = "')";
+
+        if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith(ItemValueSuffix))
         {
-            int startIndex = 0;
-            int expressionLength = expression.Length;
-            var resultBuilder = new StringBuilder(expressionLength);
+            string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - ItemValueSuffix.Length);
+            return data != null && data.TryGetValue(field, out object value) ? value?.ToString() ?? "" : "";
+        }
+        else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith(ResourceSuffix))
+        {
+            string resource = expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - ResourceSuffix.Length);
+            return baseUrl + resource;
+        }
 
-            while (true)
+        return "";
+    }
+}
+
+public class TemplateRenderer
+{
+    public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
+    {
+        var document = new HtmlDocument();
+        document.Load(template);
+
+        var baseUrl = GetBaseUrl(allData);
+
+        ProcessRepeaterNodes(document, baseUrl, allData);
+        ProcessImageNodes(document, baseUrl);
+
+        document.Save(output);
+    }
+
+    private void ProcessRepeaterNodes(HtmlDocument document, string baseUrl, Dictionary<string, Dictionary<string, object>[]> allData)
+    {
+        var repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']");
+        if (repeaterNodes != null)
+        {
+            foreach (var repeaterNode in repeaterNodes)
             {
-                int matchIndex = expression.IndexOf("itemValue('", startIndex, StringComparison.Ordinal);
-                if (matchIndex == -1)
-                    break;
-
-                int fieldStartIndex = matchIndex + 11;
-                int fieldEndIndex = expression.IndexOf("')", fieldStartIndex, StringComparison.Ordinal);
-                if (fieldEndIndex == -1)
-                    break;
-
-                string field = expression.Substring(fieldStartIndex, fieldEndIndex - fieldStartIndex);
-
-                if (data != null && data.TryGetValue(field, out object value))
+                var repeaterItemNodes = repeaterNode.SelectNodes(".//*[name()='sg:repeateritem']");
+                if (repeaterItemNodes != null)
                 {
-                    if (value != null)
+                    foreach (var repeaterItemNode in repeaterItemNodes)
                     {
-                        resultBuilder.Append(expression, startIndex, matchIndex - startIndex);
-                        resultBuilder.Append(value);
+                        var dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
+                        var repeaterItemContent = repeaterItemNode.InnerHtml;
+
+                        var repeatedContent = new StringBuilder();
+                        if (allData.TryGetValue(dataSelection, out var data))
+                        {
+                            foreach (var dataItem in data)
+                            {
+                                var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
+                                repeatedContent.Append(result);
+                            }
+                        }
+
+                        ReplaceHtml(repeaterNode, repeatedContent);
                     }
                 }
-                else
-                {
-                    resultBuilder.Append(expression, startIndex, fieldEndIndex - startIndex + 2);
-                }
-
-                // Update the startIndex for the next search
-                startIndex = fieldEndIndex + 2;
-
-                // Ensure startIndex stays within bounds
-                if (startIndex >= expressionLength)
-                    break;
             }
-
-            // Append the remaining content if any
-            if (startIndex < expressionLength)
-                resultBuilder.Append(expression, startIndex, expressionLength - startIndex);
-
-            return resultBuilder.ToString();
-        }
-
-        private static string ReplaceResourceFields(string expression, string baseUrl)
-        {
-            int startIndex = 0;
-            int expressionLength = expression.Length;
-            int baseUrlLength = baseUrl.Length;
-            var resultBuilder = new StringBuilder(expressionLength + baseUrlLength);
-
-            while (true)
-            {
-                int matchIndex = expression.IndexOf("resource('", startIndex, StringComparison.Ordinal);
-                if (matchIndex == -1)
-                    break;
-
-                int resourceStartIndex = matchIndex + 10;
-                int resourceEndIndex = expression.IndexOf("')", resourceStartIndex, StringComparison.Ordinal);
-                if (resourceEndIndex == -1)
-                    break;
-
-                resultBuilder.Append(expression, startIndex, matchIndex - startIndex);
-                resultBuilder.Append(baseUrl);
-                resultBuilder.Append(expression, resourceStartIndex, resourceEndIndex - resourceStartIndex);
-
-                // Update the startIndex for the next search
-                startIndex = resourceEndIndex + 2;
-
-                // Ensure startIndex stays within bounds
-                if (startIndex >= expressionLength)
-                    break;
-            }
-
-            // Append the remaining content if any
-            if (startIndex < expressionLength)
-                resultBuilder.Append(expression, startIndex, expressionLength - startIndex);
-
-            return resultBuilder.ToString();
         }
     }
 
-    public class TemplateRenderer
+    private void ProcessImageNodes(HtmlDocument document, string baseUrl)
     {
-        public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
+        var imageNodes = document.DocumentNode.SelectNodes("//img");
+        if (imageNodes != null)
         {
-            var document = new HtmlDocument();
-            document.Load(template);
-
-            string baseUrl = GetBaseUrl(allData);
-
-            var repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']");
-            if (repeaterNodes != null)
+            foreach (var imageNode in imageNodes)
             {
-                Parallel.ForEach(repeaterNodes, repeaterNode =>
-                {
-                    var repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']");
-                    if (repeaterItemNodes != null)
-                    {
-                        Parallel.ForEach(repeaterItemNodes, repeaterItemNode =>
-                        {
-                            string dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
-                            string repeaterItemContent = repeaterItemNode.InnerHtml;
-                            var repeatedContent = new StringBuilder();
-                            foreach (var dataItem in allData[dataSelection])
-                            {
-                                string result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
-                                repeatedContent.Append(result);
-                            }
-                            ReplaceHtml(repeaterNode, repeatedContent);
-                        });
-                    }
-                });
+                var srcAttributeValue = imageNode.GetAttributeValue("src", "");
+                var result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
+                imageNode.SetAttributeValue("src", result);
             }
-
-            var imageNodes = document.DocumentNode.SelectNodes("//img");
-            if (imageNodes != null)
-            {
-                Parallel.ForEach(imageNodes, imageNode =>
-                {
-                    string srcAttributeValue = imageNode.GetAttributeValue("src", "");
-                    string result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
-                    imageNode.SetAttributeValue("src", result);
-                });
-            }
-
-            document.Save(output);
         }
+    }
 
-        private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
+    private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
+    {
+        if (allData.TryGetValue("variables", out var variables))
         {
-            foreach (var entry in allData["variables"])
+            foreach (var variable in variables)
             {
-                if (entry.TryGetValue("name", out var name) && "baseurl".Equals(name?.ToString()))
+                if (variable.TryGetValue("name", out var name) && "baseurl".Equals(name?.ToString(), StringComparison.OrdinalIgnoreCase) && variable.TryGetValue("value", out var value))
                 {
-                    return entry.TryGetValue("value", out var value) ? value.ToString() : "";
+                    return value?.ToString() ?? "";
                 }
             }
-            return "";
         }
+        return "";
+    }
 
-        private static void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
+    private void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
+    {
+        repeaterNode.InnerHtml = repeatedContent.ToString();
+        var repeatedNodes = repeaterNode.ChildNodes;
+        var parent = repeaterNode.ParentNode;
+        repeaterNode.Remove();
+
+        foreach (var child in repeatedNodes)
         {
-            repeaterNode.InnerHtml = repeatedContent.ToString();
-
-            var repeatedNodes = repeaterNode.ChildNodes;
-            var parent = repeaterNode.ParentNode;
-
-            repeaterNode.Remove();
-
-            foreach (var node in repeatedNodes)
-            {
-                parent.AppendChild(node);
-            }
+            parent.AppendChild(child);
         }
     }
 }
