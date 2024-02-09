@@ -7,55 +7,64 @@ using System.Text;
 
 public static class ExpressionTransformer
 {
-    private const string ItemValuePrefix = "itemValue('";
-    private const string ResourcePrefix = "resource('";
-
     public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
     {
         if (string.IsNullOrEmpty(content))
             return content;
 
         StringBuilder result = new StringBuilder(content.Length);
-        int currentIndex = 0, contentLength = content.Length;
+        int currentIndex = 0;
 
-        while (currentIndex < contentLength)
+        while (currentIndex < content.Length)
         {
-            int start = content.IndexOf("[%", currentIndex, StringComparison.Ordinal);
-            int end = content.IndexOf("%]", start + 2, StringComparison.Ordinal);
-
-            if (start == -1 || end == -1)
+            int expressionStartIndex = content.IndexOf("[%", currentIndex, StringComparison.Ordinal);
+            if (expressionStartIndex == -1)
             {
-                result.Append(content, currentIndex, contentLength - currentIndex);
+                result.Append(content, currentIndex, content.Length - currentIndex);
                 break;
             }
 
-            result.Append(content, currentIndex, start - currentIndex);
+            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2, StringComparison.Ordinal);
+            if (expressionEndIndex == -1)
+            {
+                result.Append(content, expressionStartIndex, content.Length - expressionStartIndex);
+                break;
+            }
 
-            string expression = content.Substring(start + 2, end - start - 2);
-            result.Append(ProcessExpression(expression, baseUrl, data));
+            int expressionLength = expressionEndIndex - expressionStartIndex - 2;
 
-            currentIndex = end + 2;
+            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
+
+            string expression = content.Substring(expressionStartIndex + 2, expressionLength);
+            string processedExpression = ProcessExpression(expression, baseUrl, data);
+            result.Append(processedExpression);
+
+            currentIndex = expressionEndIndex + 2;
         }
 
         return result.ToString();
     }
 
+
     private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
-        if (IsValidExpression(expression, ItemValuePrefix.Length) && expression.EndsWith("')"))
-            return GetValueOrDefault(data, expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2));
+        const string ItemValuePrefix = "itemValue('";
+        const string ResourcePrefix = "resource('";
 
-        if (IsValidExpression(expression, ResourcePrefix.Length) && expression.EndsWith("')"))
-            return baseUrl + expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - 2);
+        if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith("')"))
+        {
+            string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2);
+            return data?.GetValueOrDefault(field)?.ToString() ?? "";
+        }
+        else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith("')"))
+        {
+            string resource = expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - 2);
+            return baseUrl + resource;
+        }
 
-        return string.Empty;
+        return "";
     }
 
-    private static bool IsValidExpression(string expression, int prefixLength) =>
-        expression.Length > (prefixLength + 2) && expression[0] == '\'' && expression[expression.Length - 1] == '%';
-
-    private static string GetValueOrDefault(Dictionary<string, object> data, string field) =>
-        data?.GetValueOrDefault(field)?.ToString() ?? string.Empty;
 }
 
 public class TemplateRenderer
@@ -93,6 +102,7 @@ public class TemplateRenderer
                         repeatedContent.Append(result);
                     }
                 }
+
                 ReplaceHtml(repeaterNode, repeatedContent);
             }
         }
@@ -129,7 +139,8 @@ public class TemplateRenderer
         repeaterNode.InnerHtml = repeatedContent.ToString();
         var repeatedNodes = repeaterNode.ChildNodes.ToList();
         var parent = repeaterNode.ParentNode;
-        
+        repeaterNode.Remove();
+
         foreach (var child in repeatedNodes)
         {
             parent.AppendChild(child);
