@@ -16,34 +16,25 @@ public static class ExpressionTransformer
             return content;
 
         StringBuilder result = new StringBuilder(content.Length);
-        int currentIndex = 0;
-        int contentLength = content.Length;
+        int currentIndex = 0, contentLength = content.Length;
 
         while (currentIndex < contentLength)
         {
-            int expressionStartIndex = content.IndexOf("[%", currentIndex, StringComparison.Ordinal);
-            if (expressionStartIndex == -1)
+            int start = content.IndexOf("[%", currentIndex, StringComparison.Ordinal);
+            int end = content.IndexOf("%]", start + 2, StringComparison.Ordinal);
+
+            if (start == -1 || end == -1)
             {
                 result.Append(content, currentIndex, contentLength - currentIndex);
                 break;
             }
 
-            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2, StringComparison.Ordinal);
-            if (expressionEndIndex == -1)
-            {
-                result.Append(content, expressionStartIndex, contentLength - expressionStartIndex);
-                break;
-            }
+            result.Append(content, currentIndex, start - currentIndex);
 
-            int expressionLength = expressionEndIndex - expressionStartIndex - 2;
+            string expression = content.Substring(start + 2, end - start - 2);
+            result.Append(ProcessExpression(expression, baseUrl, data));
 
-            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
-
-            string expression = content.Substring(expressionStartIndex + 2, expressionLength);
-            string processedExpression = ProcessExpression(expression, baseUrl, data);
-            result.Append(processedExpression);
-
-            currentIndex = expressionEndIndex + 2;
+            currentIndex = end + 2;
         }
 
         return result.ToString();
@@ -52,29 +43,19 @@ public static class ExpressionTransformer
     private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
         if (IsValidExpression(expression, ItemValuePrefix.Length) && expression.EndsWith("')"))
-        {
-            string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2);
-            return GetValueOrDefault(data, field);
-        }
-        else if (IsValidExpression(expression, ResourcePrefix.Length) && expression.EndsWith("')"))
-        {
-            string resource = expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - 2);
-            return baseUrl + resource;
-        }
+            return GetValueOrDefault(data, expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2));
+
+        if (IsValidExpression(expression, ResourcePrefix.Length) && expression.EndsWith("')"))
+            return baseUrl + expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - 2);
 
         return string.Empty;
     }
 
-    private static bool IsValidExpression(string expression, int prefixLength)
-    {
-        int expressionLength = expression.Length;
-        return expressionLength > (prefixLength + 2) && expression[0] == '\'' && expression[expressionLength - 1] == '%';
-    }
+    private static bool IsValidExpression(string expression, int prefixLength) =>
+        expression.Length > (prefixLength + 2) && expression[0] == '\'' && expression[expression.Length - 1] == '%';
 
-    private static string GetValueOrDefault(Dictionary<string, object> data, string field)
-    {
-        return data?.GetValueOrDefault(field)?.ToString() ?? string.Empty;
-    }
+    private static string GetValueOrDefault(Dictionary<string, object> data, string field) =>
+        data?.GetValueOrDefault(field)?.ToString() ?? string.Empty;
 }
 
 public class TemplateRenderer
@@ -112,7 +93,6 @@ public class TemplateRenderer
                         repeatedContent.Append(result);
                     }
                 }
-
                 ReplaceHtml(repeaterNode, repeatedContent);
             }
         }
