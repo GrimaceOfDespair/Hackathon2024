@@ -12,25 +12,28 @@ public static class ExpressionTransformer
         if (string.IsNullOrEmpty(content))
             return content;
 
-        var result = new StringBuilder(content.Length);
+        StringBuilder result = new StringBuilder(content.Length);
+        //String resultString = "";
         int currentIndex = 0;
-        int contentLength = content.Length;
 
-        while (currentIndex < contentLength)
+        while (currentIndex < content.Length)
         {
             int expressionStartIndex = content.IndexOf("[%", currentIndex);
             if (expressionStartIndex == -1)
             {
-                result.Append(content, currentIndex, contentLength - currentIndex);
+                //resultString += content.ToString() + " " + currentIndex.ToString() + " " + (content.Length - currentIndex) + " ";
+                result.Append(content, currentIndex, content.Length - currentIndex);
                 break;
             }
 
             result.Append(content, currentIndex, expressionStartIndex - currentIndex);
+            //resultString += content.ToString() + " " + currentIndex.ToString() + " " + (expressionStartIndex - currentIndex) + " ";
 
             int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2);
             if (expressionEndIndex == -1)
             {
-                result.Append(content, expressionStartIndex, contentLength - expressionStartIndex);
+                result.Append(content, expressionStartIndex, content.Length - expressionStartIndex);
+                //resultString += content.ToString() + " " + expressionStartIndex.ToString() + " " + (content.Length - expressionStartIndex) + " ";
                 break;
             }
 
@@ -38,32 +41,40 @@ public static class ExpressionTransformer
             string processedExpression = ProcessExpression(expression, baseUrl, data);
 
             result.Append(processedExpression);
+            //resultString += processedExpression.ToString();
 
             currentIndex = expressionEndIndex + 2;
         }
-
+        //return resultString.ToString();
         return result.ToString();
     }
 
+
     private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
-        if (expression.StartsWith("itemValue('") && expression.EndsWith("')"))
+        const string ItemValuePrefix = "itemValue('";
+        const string ItemValueSuffix = "')";
+        const string ResourcePrefix = "resource('";
+        const string ResourceSuffix = "')";
+
+        if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith(ItemValueSuffix))
         {
-            string field = expression.Substring(11, expression.Length - 13);
-            if (data != null && data.TryGetValue(field, out var value))
+            string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - ItemValueSuffix.Length);
+            if (data != null && data.TryGetValue(field, out object value))
             {
                 return value?.ToString() ?? "";
             }
             return "";
         }
-        else if (expression.StartsWith("resource('") && expression.EndsWith("')"))
+        else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith(ResourceSuffix))
         {
-            string resource = expression.Substring(10, expression.Length - 12);
+            string resource = expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - ResourceSuffix.Length);
             return baseUrl + resource;
         }
 
         return "";
     }
+
 }
 
 public class TemplateRenderer
