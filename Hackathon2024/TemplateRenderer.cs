@@ -22,7 +22,6 @@ public static class ExpressionTransformer
             {
                 result.Append(content, currentIndex, content.Length - currentIndex);
                 break;
-                //random comment
             }
 
             result.Append(content, currentIndex, expressionStartIndex - currentIndex);
@@ -45,7 +44,6 @@ public static class ExpressionTransformer
         return result.ToString();
     }
 
-
     private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
         const string ItemValuePrefix = "itemValue('";
@@ -56,11 +54,7 @@ public static class ExpressionTransformer
         if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith(ItemValueSuffix))
         {
             string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - ItemValueSuffix.Length);
-            if (data != null && data.TryGetValue(field, out object value))
-            {
-                return value?.ToString() ?? "";
-            }
-            return "";
+            return data != null && data.TryGetValue(field, out object value) ? value?.ToString() ?? "" : "";
         }
         else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith(ResourceSuffix))
         {
@@ -70,24 +64,32 @@ public static class ExpressionTransformer
 
         return "";
     }
-
 }
 
 public class TemplateRenderer
 {
+    private readonly HtmlDocument document = new HtmlDocument();
+    private string baseUrl;
+
     public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
     {
-        var document = new HtmlDocument();
         document.Load(template);
+        baseUrl = GetBaseUrl(allData);
 
-        var baseUrl = GetBaseUrl(allData);
+        ProcessRepeaterNodes(allData);
+        ProcessImageNodes();
 
+        document.Save(output);
+    }
+
+    private void ProcessRepeaterNodes(Dictionary<string, Dictionary<string, object>[]> allData)
+    {
         var repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']");
         if (repeaterNodes != null)
         {
             foreach (var repeaterNode in repeaterNodes)
             {
-                var repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']");
+                var repeaterItemNodes = repeaterNode.SelectNodes(".//*[name()='sg:repeateritem']");
                 if (repeaterItemNodes != null)
                 {
                     foreach (var repeaterItemNode in repeaterItemNodes)
@@ -105,12 +107,15 @@ public class TemplateRenderer
                             }
                         }
 
-                        ReplaceHtml(repeaterNode, repeatedContent);
+                        ReplaceHtml(repeaterNode, repeaterItemNode, repeatedContent);
                     }
                 }
             }
         }
+    }
 
+    private void ProcessImageNodes()
+    {
         var imageNodes = document.DocumentNode.SelectNodes("//img");
         if (imageNodes != null)
         {
@@ -121,8 +126,6 @@ public class TemplateRenderer
                 imageNode.SetAttributeValue("src", result);
             }
         }
-
-        document.Save(output);
     }
 
     private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
@@ -140,16 +143,17 @@ public class TemplateRenderer
         return "";
     }
 
-    private void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
+    private void ReplaceHtml(HtmlNode repeaterNode, HtmlNode repeaterItemNode, StringBuilder repeatedContent)
     {
-        repeaterNode.InnerHtml = repeatedContent.ToString();
-        var repeatedNodes = repeaterNode.ChildNodes;
+        repeaterItemNode.InnerHtml = repeatedContent.ToString();
+        var repeatedNodes = repeaterItemNode.ChildNodes;
         var parent = repeaterNode.ParentNode;
-        repeaterNode.Remove();
 
         foreach (var child in repeatedNodes)
         {
-            parent.AppendChild(child);
+            parent.InsertAfter(child.CloneNode(true), repeaterNode);
         }
+
+        repeaterNode.Remove();
     }
 }
