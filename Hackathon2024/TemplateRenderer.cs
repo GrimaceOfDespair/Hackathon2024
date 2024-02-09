@@ -13,7 +13,6 @@ public static class ExpressionTransformer
             return content;
 
         StringBuilder result = new StringBuilder(content.Length);
-        //String resultString = "";
         int currentIndex = 0;
 
         while (currentIndex < content.Length)
@@ -21,19 +20,18 @@ public static class ExpressionTransformer
             int expressionStartIndex = content.IndexOf("[%", currentIndex);
             if (expressionStartIndex == -1)
             {
-                //resultString += content.ToString() + " " + currentIndex.ToString() + " " + (content.Length - currentIndex) + " ";
+               
                 result.Append(content, currentIndex, content.Length - currentIndex);
                 break;
             }
 
             result.Append(content, currentIndex, expressionStartIndex - currentIndex);
-            //resultString += content.ToString() + " " + currentIndex.ToString() + " " + (expressionStartIndex - currentIndex) + " ";
 
             int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2);
             if (expressionEndIndex == -1)
             {
                 result.Append(content, expressionStartIndex, content.Length - expressionStartIndex);
-                //resultString += content.ToString() + " " + expressionStartIndex.ToString() + " " + (content.Length - expressionStartIndex) + " ";
+                
                 break;
             }
 
@@ -41,11 +39,11 @@ public static class ExpressionTransformer
             string processedExpression = ProcessExpression(expression, baseUrl, data);
 
             result.Append(processedExpression);
-            //resultString += processedExpression.ToString();
+            
 
             currentIndex = expressionEndIndex + 2;
         }
-        //return resultString.ToString();
+        
         return result.ToString();
     }
 
