@@ -2,8 +2,10 @@ using HtmlAgilityPack;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
+using System.Xml.Linq;
+using System.Xml;
+using System.Xml.XPath;
 
 public static class ExpressionTransformer
 {
@@ -44,7 +46,6 @@ public static class ExpressionTransformer
         return result.ToString();
     }
 
-
     private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
         const string ItemValuePrefix = "itemValue('";
@@ -69,59 +70,70 @@ public static class ExpressionTransformer
 
         return "";
     }
-
 }
 
 public class TemplateRenderer
 {
+    private const string repeaterXPath = "//*[name()='sg:repeater']";
+    private const string repeaterItemXPath = ".//*[name()='sg:repeateritem']";
+    private const string imgXPath = "//img";
+
     public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
     {
-        var document = new HtmlDocument();
-        document.Load(template);
-
         var baseUrl = GetBaseUrl(allData);
 
-        var repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']");
-        if (repeaterNodes != null)
+        using (var reader = new HtmlReader(template))
         {
-            foreach (var repeaterNode in repeaterNodes)
+            var writer = new HtmlWriter(output);
+
+            while (reader.Read())
             {
-                var repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']");
-                if (repeaterItemNodes != null)
+                if (reader.NodeType == HtmlNodeType.Element && reader.LocalName == "sg:repeater")
+                {
+                    ProcessRepeater(reader, writer, baseUrl, allData);
+                }
+                else if (reader.NodeType == HtmlNodeType.Element && reader.LocalName == "img")
+                {
+                    ProcessImage(reader, writer, baseUrl);
+                }
+                else
+                {
+                    writer.WriteNode(reader, true);
+                }
+            }
+        }
+    }
+
+    private void ProcessRepeater(HtmlReader reader, HtmlWriter writer, string baseUrl, Dictionary<string, Dictionary<string, object>[]> allData)
+    {
+        using (var subReader = reader.ReadSubtree())
+        {
+            var repeaterNode = XElement.Load(subReader);
+
+            var dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
+            var repeaterItemNodes = repeaterNode.XPathSelectElements(repeaterItemXPath);
+
+            if (allData.TryGetValue(dataSelection, out var data))
+            {
+                foreach (var dataItem in data)
                 {
                     foreach (var repeaterItemNode in repeaterItemNodes)
                     {
-                        var dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
                         var repeaterItemContent = repeaterItemNode.InnerHtml;
-
-                        var repeatedContent = new StringBuilder();
-                        if (allData.TryGetValue(dataSelection, out var data))
-                        {
-                            foreach (var dataItem in data)
-                            {
-                                var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
-                                repeatedContent.Append(result);
-                            }
-                        }
-
-                        ReplaceHtml(repeaterNode, repeatedContent);
+                        var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
+                        writer.WriteRaw(result);
                     }
                 }
             }
         }
+    }
 
-        var imageNodes = document.DocumentNode.SelectNodes("//img");
-        if (imageNodes != null)
-        {
-            foreach (var imageNode in imageNodes)
-            {
-                var srcAttributeValue = imageNode.GetAttributeValue("src", "");
-                var result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
-                imageNode.SetAttributeValue("src", result);
-            }
-        }
-
-        document.Save(output);
+    private void ProcessImage(HtmlReader reader, HtmlWriter writer, string baseUrl)
+    {
+        var srcAttributeValue = reader.GetAttribute("src");
+        var result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
+        reader.SetAttribute("src", result);
+        writer.WriteNode(reader, true);
     }
 
     private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
@@ -139,17 +151,30 @@ public class TemplateRenderer
         return "";
     }
 
-    // Test
-    private void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
+    private class HtmlReader : HtmlNodeReader
     {
-        repeaterNode.InnerHtml = repeatedContent.ToString();
-        var repeatedNodes = repeaterNode.ChildNodes;
-        var parent = repeaterNode.ParentNode;
-        repeaterNode.Remove();
-
-        foreach (var child in repeatedNodes)
+        public HtmlReader(TextReader reader) : base(reader)
         {
-            parent.AppendChild(child);
+        }
+
+        protected override bool Read()
+        {
+            bool result = base.Read();
+
+            if (NodeType == HtmlNodeType.Text && string.IsNullOrWhiteSpace(Value))
+            {
+                // Ignore whitespace-only text nodes
+                result = Read();
+            }
+
+            return result;
+        }
+    }
+
+    private class HtmlWriter : HtmlNodeWriter
+    {
+        public HtmlWriter(TextWriter writer) : base(writer)
+        {
         }
     }
 }
