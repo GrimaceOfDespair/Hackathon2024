@@ -2,7 +2,6 @@ using HtmlAgilityPack;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 
 public static class ExpressionTransformer
@@ -20,7 +19,6 @@ public static class ExpressionTransformer
             int expressionStartIndex = content.IndexOf("[%", currentIndex);
             if (expressionStartIndex == -1)
             {
-               
                 result.Append(content, currentIndex, content.Length - currentIndex);
                 break;
             }
@@ -31,7 +29,6 @@ public static class ExpressionTransformer
             if (expressionEndIndex == -1)
             {
                 result.Append(content, expressionStartIndex, content.Length - expressionStartIndex);
-                
                 break;
             }
 
@@ -39,14 +36,12 @@ public static class ExpressionTransformer
             string processedExpression = ProcessExpression(expression, baseUrl, data);
 
             result.Append(processedExpression);
-            
 
             currentIndex = expressionEndIndex + 2;
         }
-        
+
         return result.ToString();
     }
-
 
     private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
@@ -72,7 +67,6 @@ public static class ExpressionTransformer
 
         return "";
     }
-
 }
 
 public class TemplateRenderer
@@ -84,35 +78,42 @@ public class TemplateRenderer
 
         var baseUrl = GetBaseUrl(allData);
 
+        RenderRepeaterItems(document, baseUrl, allData);
+
+        RenderImageSrcAttributes(document, baseUrl);
+
+        document.Save(output);
+    }
+
+    private void RenderRepeaterItems(HtmlDocument document, string baseUrl, Dictionary<string, Dictionary<string, object>[]> allData)
+    {
         var repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']");
         if (repeaterNodes != null)
         {
             foreach (var repeaterNode in repeaterNodes)
             {
-                var repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']");
-                if (repeaterItemNodes != null)
+                var dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
+                var repeaterItemNodes = repeaterNode.SelectNodes(".//*[name()='sg:repeateritem']");
+                if (repeaterItemNodes != null && allData.TryGetValue(dataSelection, out var data))
                 {
                     foreach (var repeaterItemNode in repeaterItemNodes)
                     {
-                        var dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
                         var repeaterItemContent = repeaterItemNode.InnerHtml;
-
                         var repeatedContent = new StringBuilder();
-                        if (allData.TryGetValue(dataSelection, out var data))
+                        foreach (var dataItem in data)
                         {
-                            foreach (var dataItem in data)
-                            {
-                                var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
-                                repeatedContent.Append(result);
-                            }
+                            var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
+                            repeatedContent.Append(result);
                         }
-
                         ReplaceHtml(repeaterNode, repeatedContent);
                     }
                 }
             }
         }
+    }
 
+    private void RenderImageSrcAttributes(HtmlDocument document, string baseUrl)
+    {
         var imageNodes = document.DocumentNode.SelectNodes("//img");
         if (imageNodes != null)
         {
@@ -123,8 +124,6 @@ public class TemplateRenderer
                 imageNode.SetAttributeValue("src", result);
             }
         }
-
-        document.Save(output);
     }
 
     private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
