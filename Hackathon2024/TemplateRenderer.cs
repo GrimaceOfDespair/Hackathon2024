@@ -2,32 +2,45 @@ using HtmlAgilityPack;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 
 public static class ExpressionTransformer
 {
-    private static readonly Regex ExpressionPattern = new Regex(@"\[%(.+?)%\]", RegexOptions.Compiled);
-
     public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
     {
         if (string.IsNullOrEmpty(content))
             return content;
 
-        MatchCollection matches = ExpressionPattern.Matches(content);
         StringBuilder result = new StringBuilder(content.Length);
-        int lastIndex = 0;
+        int currentIndex = 0;
 
-        foreach (Match match in matches)
+        while (currentIndex < content.Length)
         {
-            result.Append(content, lastIndex, match.Index - lastIndex);
-            string expression = match.Groups[1].Value;
+            int expressionStartIndex = content.IndexOf("[%", currentIndex);
+            if (expressionStartIndex == -1)
+            {
+                result.Append(content, currentIndex, content.Length - currentIndex);
+                break;
+            }
+
+            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
+
+            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2);
+            if (expressionEndIndex == -1)
+            {
+                result.Append(content, expressionStartIndex, content.Length - expressionStartIndex);
+                break;
+            }
+
+            string expression = content.Substring(expressionStartIndex + 2, expressionEndIndex - expressionStartIndex - 2);
             string processedExpression = ProcessExpression(expression, baseUrl, data);
+
             result.Append(processedExpression);
-            lastIndex = match.Index + match.Length;
+
+            currentIndex = expressionEndIndex + 2;
         }
 
-        result.Append(content, lastIndex, content.Length - lastIndex);
         return result.ToString();
     }
 
@@ -56,6 +69,7 @@ public static class ExpressionTransformer
 
         return "";
     }
+
 }
 
 public class TemplateRenderer
@@ -67,42 +81,35 @@ public class TemplateRenderer
 
         var baseUrl = GetBaseUrl(allData);
 
-        RenderRepeaterItems(document, baseUrl, allData);
-
-        RenderImageSrcAttributes(document, baseUrl);
-
-        document.Save(output);
-    }
-
-    private void RenderRepeaterItems(HtmlDocument document, string baseUrl, Dictionary<string, Dictionary<string, object>[]> allData)
-    {
         var repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']");
         if (repeaterNodes != null)
         {
             foreach (var repeaterNode in repeaterNodes)
             {
-                var dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
-                var repeaterItemNodes = repeaterNode.SelectNodes(".//*[name()='sg:repeateritem']");
-                if (repeaterItemNodes != null && allData.TryGetValue(dataSelection, out var data))
+                var repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']");
+                if (repeaterItemNodes != null)
                 {
                     foreach (var repeaterItemNode in repeaterItemNodes)
                     {
+                        var dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
                         var repeaterItemContent = repeaterItemNode.InnerHtml;
+
                         var repeatedContent = new StringBuilder();
-                        foreach (var dataItem in data)
+                        if (allData.TryGetValue(dataSelection, out var data))
                         {
-                            var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
-                            repeatedContent.Append(result);
+                            foreach (var dataItem in data)
+                            {
+                                var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
+                                repeatedContent.Append(result);
+                            }
                         }
+
                         ReplaceHtml(repeaterNode, repeatedContent);
                     }
                 }
             }
         }
-    }
 
-    private void RenderImageSrcAttributes(HtmlDocument document, string baseUrl)
-    {
         var imageNodes = document.DocumentNode.SelectNodes("//img");
         if (imageNodes != null)
         {
@@ -113,6 +120,8 @@ public class TemplateRenderer
                 imageNode.SetAttributeValue("src", result);
             }
         }
+
+        document.Save(output);
     }
 
     private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
