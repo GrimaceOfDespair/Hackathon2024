@@ -15,20 +15,40 @@ public static class ExpressionTransformer
         if (string.IsNullOrEmpty(content))
             return content;
 
-        var matches = ExpressionPattern.Matches(content);
-        var result = new StringBuilder(content.Length);
-        int lastIndex = 0;
+        StringBuilder result = new StringBuilder(content.Length);
+        result.EnsureCapacity(content.Length); // Pre-allocate capacity
 
-        foreach (Match match in matches)
+        int currentIndex = 0;
+        int contentLength = content.Length;
+
+        while (currentIndex < contentLength)
         {
-            result.Append(content, lastIndex, match.Index - lastIndex);
-            string expression = match.Groups[1].Value;
+            int expressionStartIndex = content.IndexOf("[%", currentIndex, StringComparison.Ordinal);
+            if (expressionStartIndex == -1)
+            {
+                result.Append(content, currentIndex, contentLength - currentIndex);
+                break;
+            }
+
+            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2, StringComparison.Ordinal);
+            if (expressionEndIndex == -1)
+            {
+                result.Append(content, expressionStartIndex, contentLength - expressionStartIndex);
+                break;
+            }
+
+            // Append content before the expression
+            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
+
+            // Process the expression
+            int expressionLength = expressionEndIndex - expressionStartIndex - 2;
+            string expression = content.Substring(expressionStartIndex + 2, expressionLength);
             string processedExpression = ProcessExpression(expression, baseUrl, data);
             result.Append(processedExpression);
-            lastIndex = match.Index + match.Length;
+
+            currentIndex = expressionEndIndex + 2;
         }
 
-        result.Append(content, lastIndex, content.Length - lastIndex);
         return result.ToString();
     }
 
@@ -40,7 +60,9 @@ public static class ExpressionTransformer
         if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith("')"))
         {
             string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2);
-            return data?.GetValueOrDefault(field)?.ToString() ?? "";
+            object value;
+            if (data != null && data.TryGetValue(field, out value))
+                return value?.ToString() ?? "";
         }
         else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith("')"))
         {
