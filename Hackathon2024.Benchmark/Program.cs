@@ -8,7 +8,6 @@ namespace Hackathon2024.Benchmark
     using System;
     using System.IO;
     using System.Text.Json;
-    using System.Text.RegularExpressions;
     using System.Threading.Tasks;
     using Data = System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, object>[]>;
 

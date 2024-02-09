@@ -6,11 +6,7 @@ using System.Text;
 
 namespace Hackathon2024
 {
-    public struct KnownExpressions
-    {
-        public const string ItemValue = "itemValue";
-        public const string Resource = "resource";
-    }
+   
 
     public static class ExpressionTransformer
     {
