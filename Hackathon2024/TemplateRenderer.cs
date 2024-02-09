@@ -13,35 +13,39 @@ public static class ExpressionTransformer
 
         StringBuilder result = new StringBuilder(content.Length);
         int currentIndex = 0;
+        int contentLength = content.Length;
+        int startTagLength = 2; // Length of start tag [%.
+        int endTagLength = 2; // Length of end tag %].
 
-        while (currentIndex < content.Length)
+        while (currentIndex < contentLength)
         {
-            int expressionStartIndex = content.IndexOf("[%", currentIndex);
+            int expressionStartIndex = content.IndexOf("[%", currentIndex, StringComparison.Ordinal);
             if (expressionStartIndex == -1)
             {
-                result.Append(content, currentIndex, content.Length - currentIndex);
+                result.Append(content, currentIndex, contentLength - currentIndex);
                 break;
             }
 
             result.Append(content, currentIndex, expressionStartIndex - currentIndex);
 
-            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2);
+            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + startTagLength, StringComparison.Ordinal);
             if (expressionEndIndex == -1)
             {
-                result.Append(content, expressionStartIndex, content.Length - expressionStartIndex);
+                result.Append(content, expressionStartIndex, contentLength - expressionStartIndex);
                 break;
             }
 
-            string expression = content.Substring(expressionStartIndex + 2, expressionEndIndex - expressionStartIndex - 2);
+            string expression = content.Substring(expressionStartIndex + startTagLength, expressionEndIndex - expressionStartIndex - startTagLength);
             string processedExpression = ProcessExpression(expression, baseUrl, data);
 
             result.Append(processedExpression);
 
-            currentIndex = expressionEndIndex + 2;
+            currentIndex = expressionEndIndex + endTagLength;
         }
 
         return result.ToString();
     }
+
 
     private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
