@@ -7,6 +7,6 @@
         public static Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
 
         public static string NaiveHtmlNormalize(this string s) =>
-            Whitespace.Replace(s, " ").Trim();
+            Whitespace.Replace("<!DOCTYPE html", "<!DOCTYPE HTML").Replace(s, " ").Trim();
     }
 }

@@ -4,6 +4,15 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
+using AngleSharp;
+using AngleSharp.Dom;
+using AngleSharp.Html.Parser;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
 
 public static class ExpressionTransformer
 {
@@ -74,54 +83,46 @@ public static class ExpressionTransformer
 
 public class TemplateRenderer
 {
-    public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
+    public async Task RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
     {
-        var document = new HtmlDocument();
-        document.Load(template);
+        var config = Configuration.Default.WithDefaultLoader();
+        var context = BrowsingContext.New(config);
+        var document = await context.OpenAsync(req => req.Content(template.ReadToEnd()));
 
         var baseUrl = GetBaseUrl(allData);
 
-        var repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']");
-        if (repeaterNodes != null)
+        var repeaterNodes = document.QuerySelectorAll("sg\\:repeater");
+        foreach (var repeaterNode in repeaterNodes)
         {
-            foreach (var repeaterNode in repeaterNodes)
+            var repeaterItemNodes = repeaterNode.QuerySelectorAll("sg\\:repeateritem");
+            foreach (var repeaterItemNode in repeaterItemNodes)
             {
-                var repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']");
-                if (repeaterItemNodes != null)
+                var dataSelection = repeaterNode.GetAttribute("dataselection");
+                var repeaterItemContent = repeaterItemNode.InnerHtml;
+
+                var repeatedContent = new StringBuilder();
+                if (allData.TryGetValue(dataSelection, out var data))
                 {
-                    foreach (var repeaterItemNode in repeaterItemNodes)
+                    foreach (var dataItem in data)
                     {
-                        var dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
-                        var repeaterItemContent = repeaterItemNode.InnerHtml;
-
-                        var repeatedContent = new StringBuilder();
-                        if (allData.TryGetValue(dataSelection, out var data))
-                        {
-                            foreach (var dataItem in data)
-                            {
-                                var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
-                                repeatedContent.Append(result);
-                            }
-                        }
-
-                        ReplaceHtml(repeaterNode, repeatedContent);
+                        var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
+                        repeatedContent.Append(result);
                     }
                 }
+
+                ReplaceHtml(repeaterNode, repeatedContent);
             }
         }
 
-        var imageNodes = document.DocumentNode.SelectNodes("//img");
-        if (imageNodes != null)
+        var imageNodes = document.QuerySelectorAll("img");
+        foreach (var imageNode in imageNodes)
         {
-            foreach (var imageNode in imageNodes)
-            {
-                var srcAttributeValue = imageNode.GetAttributeValue("src", "");
-                var result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
-                imageNode.SetAttributeValue("src", result);
-            }
+            var srcAttributeValue = imageNode.GetAttribute("src");
+            var result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
+            imageNode.SetAttribute("src", result);
         }
 
-        document.Save(output);
+        await output.WriteAsync(document.DocumentElement.OuterHtml);
     }
 
     private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
@@ -139,16 +140,23 @@ public class TemplateRenderer
         return "";
     }
 
-    private void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
+    private void ReplaceHtml(IElement repeaterNode, StringBuilder repeatedContent)
     {
-        repeaterNode.InnerHtml = repeatedContent.ToString();
-        var repeatedNodes = repeaterNode.ChildNodes;
-        var parent = repeaterNode.ParentNode;
-        repeaterNode.Remove();
+        // Parse the repeated content into a separate document
+        var parser = new HtmlParser();
+        var newContentDoc = parser.ParseDocument(repeatedContent.ToString());
 
-        foreach (var child in repeatedNodes)
+        // Clear the inner HTML of the repeaterNode
+        while (repeaterNode.HasChildNodes)
         {
-            parent.AppendChild(child);
+            repeaterNode.RemoveChild(repeaterNode.FirstChild);
+        }
+
+        // Move all child nodes from the new content to the repeaterNode
+        foreach (var child in newContentDoc.Body.ChildNodes.ToList())
+        {
+            repeaterNode.AppendChild(child);
         }
     }
+
 }
