@@ -44,6 +44,7 @@ public static class ExpressionTransformer
         return result.ToString();
     }
 
+
     private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
         const string ItemValuePrefix = "itemValue('";
@@ -54,7 +55,11 @@ public static class ExpressionTransformer
         if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith(ItemValueSuffix))
         {
             string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - ItemValueSuffix.Length);
-            return data != null && data.TryGetValue(field, out object value) ? value?.ToString() ?? "" : "";
+            if (data != null && data.TryGetValue(field, out object value))
+            {
+                return value?.ToString() ?? "";
+            }
+            return "";
         }
         else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith(ResourceSuffix))
         {
@@ -64,32 +69,24 @@ public static class ExpressionTransformer
 
         return "";
     }
+
 }
 
 public class TemplateRenderer
 {
-    private readonly HtmlDocument document = new HtmlDocument();
-    private string baseUrl;
-
     public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
     {
+        var document = new HtmlDocument();
         document.Load(template);
-        baseUrl = GetBaseUrl(allData);
 
-        ProcessRepeaterNodes(allData);
-        ProcessImageNodes();
+        var baseUrl = GetBaseUrl(allData);
 
-        document.Save(output);
-    }
-
-    private void ProcessRepeaterNodes(Dictionary<string, Dictionary<string, object>[]> allData)
-    {
         var repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']");
         if (repeaterNodes != null)
         {
             foreach (var repeaterNode in repeaterNodes)
             {
-                var repeaterItemNodes = repeaterNode.SelectNodes(".//*[name()='sg:repeateritem']");
+                var repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']");
                 if (repeaterItemNodes != null)
                 {
                     foreach (var repeaterItemNode in repeaterItemNodes)
@@ -107,15 +104,12 @@ public class TemplateRenderer
                             }
                         }
 
-                        ReplaceHtml(repeaterNode, repeaterItemNode, repeatedContent);
+                        ReplaceHtml(repeaterNode, repeatedContent);
                     }
                 }
             }
         }
-    }
 
-    private void ProcessImageNodes()
-    {
         var imageNodes = document.DocumentNode.SelectNodes("//img");
         if (imageNodes != null)
         {
@@ -126,6 +120,8 @@ public class TemplateRenderer
                 imageNode.SetAttributeValue("src", result);
             }
         }
+
+        document.Save(output);
     }
 
     private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
@@ -143,17 +139,16 @@ public class TemplateRenderer
         return "";
     }
 
-    private void ReplaceHtml(HtmlNode repeaterNode, HtmlNode repeaterItemNode, StringBuilder repeatedContent)
+    private void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
     {
-        repeaterItemNode.InnerHtml = repeatedContent.ToString();
-        var repeatedNodes = repeaterItemNode.ChildNodes;
+        repeaterNode.InnerHtml = repeatedContent.ToString();
+        var repeatedNodes = repeaterNode.ChildNodes;
         var parent = repeaterNode.ParentNode;
+        repeaterNode.Remove();
 
         foreach (var child in repeatedNodes)
         {
-            parent.InsertAfter(child.CloneNode(true), repeaterNode);
+            parent.AppendChild(child);
         }
-
-        repeaterNode.Remove();
     }
 }
