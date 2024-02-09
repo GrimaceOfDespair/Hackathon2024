@@ -1,17 +1,12 @@
-using HtmlAgilityPack;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
+using HtmlAgilityPack;
 
 namespace Hackathon2024
 {
-    public struct KnownExpressions
-    {
-        public const string ItemValue = "itemValue";
-        public const string Resource = "resource";
-    }
-
     public static class ExpressionTransformer
     {
         public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
@@ -139,18 +134,6 @@ namespace Hackathon2024
 
     public class TemplateRenderer
     {
-        private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
-        {
-            foreach (var entry in allData["variables"])
-            {
-                if (entry.TryGetValue("name", out var name) && "baseurl".Equals(name?.ToString()))
-                {
-                    return entry.TryGetValue("value", out var value) ? value.ToString() : "";
-                }
-            }
-            return "";
-        }
-
         public void RenderTemplate(TextReader template, TextWriter output, Dictionary<string, Dictionary<string, object>[]> allData)
         {
             var document = new HtmlDocument();
@@ -161,12 +144,12 @@ namespace Hackathon2024
             var repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']");
             if (repeaterNodes != null)
             {
-                foreach (var repeaterNode in repeaterNodes)
+                Parallel.ForEach(repeaterNodes, repeaterNode =>
                 {
                     var repeaterItemNodes = repeaterNode.SelectNodes("//*[name()='sg:repeateritem']");
                     if (repeaterItemNodes != null)
                     {
-                        foreach (var repeaterItemNode in repeaterItemNodes)
+                        Parallel.ForEach(repeaterItemNodes, repeaterItemNode =>
                         {
                             string dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
                             string repeaterItemContent = repeaterItemNode.InnerHtml;
@@ -177,23 +160,35 @@ namespace Hackathon2024
                                 repeatedContent.Append(result);
                             }
                             ReplaceHtml(repeaterNode, repeatedContent);
-                        }
+                        });
                     }
-                }
+                });
             }
 
             var imageNodes = document.DocumentNode.SelectNodes("//img");
             if (imageNodes != null)
             {
-                foreach (var imageNode in imageNodes)
+                Parallel.ForEach(imageNodes, imageNode =>
                 {
                     string srcAttributeValue = imageNode.GetAttributeValue("src", "");
                     string result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
                     imageNode.SetAttributeValue("src", result);
-                }
+                });
             }
 
             document.Save(output);
+        }
+
+        private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
+        {
+            foreach (var entry in allData["variables"])
+            {
+                if (entry.TryGetValue("name", out var name) && "baseurl".Equals(name?.ToString()))
+                {
+                    return entry.TryGetValue("value", out var value) ? value.ToString() : "";
+                }
+            }
+            return "";
         }
 
         private static void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
