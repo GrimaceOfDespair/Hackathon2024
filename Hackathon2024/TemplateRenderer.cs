@@ -45,7 +45,6 @@ public static class ExpressionTransformer
     }
 
 
-
     private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
         const string ItemValuePrefix = "itemValue('";
