@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 public static class ExpressionTransformer
 {
@@ -84,38 +85,49 @@ public class TemplateRenderer
     private void ProcessRepeaterNodes(HtmlDocument document, string baseUrl, Dictionary<string, Dictionary<string, object>[]> allData)
     {
         var repeaterNodes = document.DocumentNode.Descendants("sg:repeater").ToList();
+        var tasks = new List<Task>();
+
         foreach (var repeaterNode in repeaterNodes)
         {
             var repeaterItemNodes = repeaterNode.Descendants("sg:repeateritem").ToList();
+            var repeaterNodeParent = repeaterNode.ParentNode;
+            var repeaterContent = new StringBuilder();
+
             foreach (var repeaterItemNode in repeaterItemNodes)
             {
                 var dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
                 var repeaterItemContent = repeaterItemNode.InnerHtml;
 
-                var repeatedContent = new StringBuilder();
                 if (allData.TryGetValue(dataSelection, out var data))
                 {
                     foreach (var dataItem in data)
                     {
                         var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
-                        repeatedContent.Append(result);
+                        repeaterContent.Append(result);
                     }
                 }
-
-                ReplaceHtml(repeaterNode, repeatedContent);
             }
+
+            tasks.Add(Task.Run(() => ReplaceHtml(repeaterNodeParent, repeaterNode, repeaterContent)));
         }
+
+        Task.WaitAll(tasks.ToArray());
     }
 
     private void ProcessImageNodes(HtmlDocument document, string baseUrl)
     {
         var imageNodes = document.DocumentNode.Descendants("img").ToList();
+        var tasks = new List<Task>();
+
         foreach (var imageNode in imageNodes)
         {
             var srcAttributeValue = imageNode.GetAttributeValue("src", "");
             var result = ExpressionTransformer.RenderExpressions(srcAttributeValue, baseUrl);
-            imageNode.SetAttributeValue("src", result);
+
+            tasks.Add(Task.Run(() => imageNode.SetAttributeValue("src", result)));
         }
+
+        Task.WaitAll(tasks.ToArray());
     }
 
     private string GetBaseUrl(Dictionary<string, Dictionary<string, object>[]> allData)
@@ -133,16 +145,9 @@ public class TemplateRenderer
         return "";
     }
 
-    private void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
+    private void ReplaceHtml(HtmlNode parent, HtmlNode nodeToRemove, StringBuilder replacementContent)
     {
-        repeaterNode.InnerHtml = repeatedContent.ToString();
-        var repeatedNodes = repeaterNode.ChildNodes.ToList();
-        var parent = repeaterNode.ParentNode;
-        repeaterNode.Remove();
-
-        foreach (var child in repeatedNodes)
-        {
-            parent.AppendChild(child);
-        }
+        nodeToRemove.ParentNode.RemoveChild(nodeToRemove);
+        parent.InnerHtml += replacementContent.ToString();
     }
 }
