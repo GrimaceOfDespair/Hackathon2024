@@ -29,6 +29,8 @@
             Assert.Equal(
                 templateContent.NaiveHtmlNormalize(),
                 output.ToString().NaiveHtmlNormalize());
+
+
         }
     }
 }
