@@ -22,6 +22,7 @@ public static class ExpressionTransformer
             {
                 result.Append(content, currentIndex, content.Length - currentIndex);
                 break;
+                //random comment
             }
 
             result.Append(content, currentIndex, expressionStartIndex - currentIndex);
