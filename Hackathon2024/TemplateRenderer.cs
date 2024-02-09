@@ -33,11 +33,8 @@ public static class ExpressionTransformer
 
             int expressionLength = expressionEndIndex - expressionStartIndex - 2;
 
-            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
-
-            string expression = content.Substring(expressionStartIndex + 2, expressionLength);
-            string processedExpression = ProcessExpression(expression, baseUrl, data);
-            result.Append(processedExpression);
+            result.Append(content, currentIndex, expressionStartIndex - currentIndex)
+                  .Append(ProcessExpression(content, expressionStartIndex + 2, expressionLength, baseUrl, data));
 
             currentIndex = expressionEndIndex + 2;
         }
@@ -45,27 +42,30 @@ public static class ExpressionTransformer
         return result.ToString();
     }
 
-
-    private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
+    private static string ProcessExpression(string content, int startIndex, int length, string baseUrl, Dictionary<string, object> data)
     {
         const string ItemValuePrefix = "itemValue('";
         const string ResourcePrefix = "resource('";
 
-        if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith("')"))
+        if (content[startIndex] == '%' && content[startIndex + length - 1] == '%' && length > 2)
         {
-            string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2);
-            return data?.GetValueOrDefault(field)?.ToString() ?? "";
-        }
-        else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith("')"))
-        {
-            string resource = expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - 2);
-            return baseUrl + resource;
+            string expression = content.Substring(startIndex, length);
+            if (expression.StartsWith(ItemValuePrefix, StringComparison.Ordinal) && expression.EndsWith("')"))
+            {
+                string field = expression.Substring(ItemValuePrefix.Length, length - ItemValuePrefix.Length - 2);
+                return data?.GetValueOrDefault(field)?.ToString() ?? "";
+            }
+            else if (expression.StartsWith(ResourcePrefix, StringComparison.Ordinal) && expression.EndsWith("')"))
+            {
+                string resource = expression.Substring(ResourcePrefix.Length, length - ResourcePrefix.Length - 2);
+                return baseUrl + resource;
+            }
         }
 
         return "";
     }
-
 }
+
 
 public class TemplateRenderer
 {
