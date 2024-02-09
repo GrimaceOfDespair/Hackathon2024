@@ -12,8 +12,7 @@ public static class ExpressionTransformer
         if (string.IsNullOrEmpty(content))
             return content;
 
-        
-        var resultString = $"";
+        StringBuilder result = new StringBuilder(content.Length);
         int currentIndex = 0;
 
         while (currentIndex < content.Length)
@@ -21,29 +20,28 @@ public static class ExpressionTransformer
             int expressionStartIndex = content.IndexOf("[%", currentIndex);
             if (expressionStartIndex == -1)
             {
-                resultString += $"{content} {currentIndex} {content.Length - currentIndex}";
+                result.Append(content, currentIndex, content.Length - currentIndex);
                 break;
             }
 
-            
-            resultString += $"{content} {currentIndex} {expressionStartIndex - currentIndex}";
+            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
 
             int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2);
             if (expressionEndIndex == -1)
             {
-                resultString += $"{content} {expressionStartIndex} {content.Length - expressionStartIndex}";
+                result.Append(content, expressionStartIndex, content.Length - expressionStartIndex);
                 break;
             }
 
             string expression = content.Substring(expressionStartIndex + 2, expressionEndIndex - expressionStartIndex - 2);
             string processedExpression = ProcessExpression(expression, baseUrl, data);
 
-            resultString += $"{processedExpression}";
+            result.Append(processedExpression);
 
             currentIndex = expressionEndIndex + 2;
         }
 
-        return resultString;
+        return result.ToString();
     }
 
 
@@ -82,7 +80,6 @@ public class TemplateRenderer
         document.Load(template);
 
         var baseUrl = GetBaseUrl(allData);
-        
 
         var repeaterNodes = document.DocumentNode.SelectNodes("//*[name()='sg:repeater']");
         if (repeaterNodes != null)
