@@ -8,64 +8,47 @@ using System.Text.RegularExpressions;
 
 public static class ExpressionTransformer
 {
+    private static readonly Regex ExpressionPattern = new Regex(@"\[%(.+?)%\]", RegexOptions.Compiled);
+
     public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
     {
         if (string.IsNullOrEmpty(content))
             return content;
 
-        StringBuilder result = new StringBuilder(content.Length);
+        var matches = ExpressionPattern.Matches(content);
+        var result = new StringBuilder(content.Length);
+        int lastIndex = 0;
 
-        int currentIndex = 0;
-
-        while (currentIndex < content.Length)
+        foreach (Match match in matches)
         {
-            int expressionStartIndex = content.IndexOf("[%", currentIndex, StringComparison.Ordinal);
-            if (expressionStartIndex == -1)
-            {
-                result.Append(content, currentIndex, content.Length - currentIndex);
-                break;
-            }
-
-            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2, StringComparison.Ordinal);
-            if (expressionEndIndex == -1)
-            {
-                result.Append(content, expressionStartIndex, content.Length - expressionStartIndex);
-                break;
-            }
-
-            int expressionLength = expressionEndIndex - expressionStartIndex - 2;
-
-            result.Append(content, currentIndex, expressionStartIndex - currentIndex)
-                  .Append(ProcessExpression(content, expressionStartIndex + 2, expressionLength, baseUrl, data));
-
-            currentIndex = expressionEndIndex + 2;
+            result.Append(content, lastIndex, match.Index - lastIndex);
+            string expression = match.Groups[1].Value;
+            string processedExpression = ProcessExpression(expression, baseUrl, data);
+            result.Append(processedExpression);
+            lastIndex = match.Index + match.Length;
         }
 
+        result.Append(content, lastIndex, content.Length - lastIndex);
         return result.ToString();
     }
 
-    private static string ProcessExpression(string expression, int startIndex, int length, string baseUrl, Dictionary<string, object> data)
+    private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
         const string ItemValuePrefix = "itemValue('";
         const string ResourcePrefix = "resource('";
 
-        if (IsValidExpression(expression, ItemValuePrefix.Length) && expression[length - 1] == '\'')
+        if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith("')"))
         {
-            string field = expression.Substring(ItemValuePrefix.Length, length - ItemValuePrefix.Length - 2);
-            return data?.GetValueOrDefault(field)?.ToString() ?? string.Empty;
+            string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2);
+            return data?.GetValueOrDefault(field)?.ToString() ?? "";
         }
-        else if (IsValidExpression(expression, ResourcePrefix.Length) && expression[length - 1] == '\'')
+        else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith("')"))
         {
-            string resource = expression.Substring(ResourcePrefix.Length, length - ResourcePrefix.Length - 2);
-            return Path.Combine(baseUrl, resource);
+            string resource = expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - 2);
+            return baseUrl + resource;
         }
 
-        return string.Empty;
-    }
-
-    private static bool IsValidExpression(string expression, int prefixLength)
-    {
-        return expression.Length > (prefixLength + 2) && expression[0] == '\'' && expression[^1] == '%';
+        return "";
     }
 }
 
