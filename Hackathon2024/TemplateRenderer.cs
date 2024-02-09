@@ -139,7 +139,6 @@ public class TemplateRenderer
         return "";
     }
 
-    // Test
     private void ReplaceHtml(HtmlNode repeaterNode, StringBuilder repeatedContent)
     {
         repeaterNode.InnerHtml = repeatedContent.ToString();
