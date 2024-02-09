@@ -13,33 +13,30 @@ public static class ExpressionTransformer
             return content;
 
         StringBuilder result = new StringBuilder(content.Length);
-        result.EnsureCapacity(content.Length);
-
         int currentIndex = 0;
-        int contentLength = content.Length;
 
-        while (currentIndex < contentLength)
+        while (currentIndex < content.Length)
         {
-            int expressionStartIndex = content.IndexOf("[%", currentIndex);
+            int expressionStartIndex = content.IndexOf("[%", currentIndex, StringComparison.Ordinal);
             if (expressionStartIndex == -1)
             {
-                result.Append(content, currentIndex, contentLength - currentIndex);
+                result.Append(content, currentIndex, content.Length - currentIndex);
                 break;
             }
 
-            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
-
-            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2);
+            int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2, StringComparison.Ordinal);
             if (expressionEndIndex == -1)
             {
-                result.Append(content, expressionStartIndex, contentLength - expressionStartIndex);
+                result.Append(content, expressionStartIndex, content.Length - expressionStartIndex);
                 break;
             }
 
             int expressionLength = expressionEndIndex - expressionStartIndex - 2;
+
+            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
+
             string expression = content.Substring(expressionStartIndex + 2, expressionLength);
             string processedExpression = ProcessExpression(expression, baseUrl, data);
-
             result.Append(processedExpression);
 
             currentIndex = expressionEndIndex + 2;
@@ -47,6 +44,7 @@ public static class ExpressionTransformer
 
         return result.ToString();
     }
+
 
     private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
@@ -56,9 +54,7 @@ public static class ExpressionTransformer
         if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith("')"))
         {
             string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2);
-            object value;
-            if (data != null && data.TryGetValue(field, out value))
-                return value?.ToString() ?? "";
+            return data?.GetValueOrDefault(field)?.ToString() ?? "";
         }
         else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith("')"))
         {
