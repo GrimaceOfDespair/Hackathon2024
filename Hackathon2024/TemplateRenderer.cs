@@ -84,27 +84,27 @@ public class TemplateRenderer
 
     private void ProcessRepeaterNodes(HtmlDocument document, string baseUrl, Dictionary<string, Dictionary<string, object>[]> allData)
     {
-        var repeaterNodes = document.DocumentNode.Descendants("sg:repeater").ToList();
-        foreach (var repeaterNode in repeaterNodes)
+        var repeaterItemNodes = document.DocumentNode.DescendantsAndSelf("sg:repeateritem").ToList();
+        foreach (var repeaterItemNode in repeaterItemNodes)
         {
-            var repeaterItemNodes = repeaterNode.Descendants("sg:repeateritem").ToList();
-            foreach (var repeaterItemNode in repeaterItemNodes)
+            // Retrieve the data selection once for each repeater item
+            var dataSelection = repeaterItemNode.GetAttributeValue("dataselection", "");
+            var repeaterItemContent = repeaterItemNode.InnerHtml;
+
+            // Check if the required data exists
+            if (!allData.TryGetValue(dataSelection, out var data))
             {
-                var dataSelection = repeaterNode.GetAttributeValue("dataselection", "");
-                var repeaterItemContent = repeaterItemNode.InnerHtml;
-
-                var repeatedContent = new StringBuilder();
-                if (allData.TryGetValue(dataSelection, out var data))
-                {
-                    foreach (var dataItem in data)
-                    {
-                        var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
-                        repeatedContent.Append(result);
-                    }
-                }
-
-                ReplaceHtml(repeaterNode, repeatedContent);
+                continue; // Skip this iteration if data is not found
             }
+
+            var repeatedContent = new StringBuilder();
+            foreach (var dataItem in data)
+            {
+                var result = ExpressionTransformer.RenderExpressions(repeaterItemContent, baseUrl, dataItem);
+                repeatedContent.AppendLine(result); // Append with a newline
+            }
+
+            ReplaceHtml(repeaterItemNode, repeatedContent);
         }
     }
 
