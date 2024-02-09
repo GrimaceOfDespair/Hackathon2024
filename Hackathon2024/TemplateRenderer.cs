@@ -39,7 +39,7 @@ public static class ExpressionTransformer
         if (IsValidExpression(expression, ItemValuePrefix.Length) && expression.EndsWith("')"))
         {
             string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2);
-            return data?.GetValueOrDefault(field)?.ToString() ?? string.Empty;
+            return GetValueOrDefault(data, field);
         }
         else if (IsValidExpression(expression, ResourcePrefix.Length) && expression.EndsWith("')"))
         {
@@ -53,6 +53,11 @@ public static class ExpressionTransformer
     private static bool IsValidExpression(string expression, int prefixLength)
     {
         return expression.Length > (prefixLength + 2) && expression[0] == '\'' && expression[^1] == '%';
+    }
+
+    private static string GetValueOrDefault(Dictionary<string, object> data, string field)
+    {
+        return data?.GetValueOrDefault(field)?.ToString() ?? string.Empty;
     }
 }
 
