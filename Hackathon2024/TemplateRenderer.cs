@@ -33,8 +33,11 @@ public static class ExpressionTransformer
 
             int expressionLength = expressionEndIndex - expressionStartIndex - 2;
 
-            result.Append(content, currentIndex, expressionStartIndex - currentIndex)
-                  .Append(ProcessExpression(content, expressionStartIndex + 2, expressionLength, baseUrl, data));
+            result.Append(content, currentIndex, expressionStartIndex - currentIndex);
+
+            string expression = content.Substring(expressionStartIndex + 2, expressionLength);
+            string processedExpression = ProcessExpression(expression, baseUrl, data);
+            result.Append(processedExpression);
 
             currentIndex = expressionEndIndex + 2;
         }
@@ -42,44 +45,27 @@ public static class ExpressionTransformer
         return result.ToString();
     }
 
-    private static string ProcessExpression(string content, int startIndex, int length, string baseUrl, Dictionary<string, object> data)
+
+    private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
         const string ItemValuePrefix = "itemValue('";
         const string ResourcePrefix = "resource('";
 
-        if (IsValidExpression(content, startIndex, length, ItemValuePrefix.Length) &&
-            content[startIndex + length - 1] == ')' && content[startIndex + length - 2] == '\'')
+        if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith("')"))
         {
-            string expression = content.Substring(startIndex, length);
-            if (expression.StartsWith(ItemValuePrefix, StringComparison.Ordinal))
-            {
-                string field = expression.Substring(ItemValuePrefix.Length, length - ItemValuePrefix.Length - 2);
-                return data?.GetValueOrDefault(field)?.ToString() ?? "";
-            }
+            string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2);
+            return data?.GetValueOrDefault(field)?.ToString() ?? "";
         }
-        else if (IsValidExpression(content, startIndex, length, ResourcePrefix.Length) &&
-                 content[startIndex + length - 1] == ')' && content[startIndex + length - 2] == '\'')
+        else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith("')"))
         {
-            string expression = content.Substring(startIndex, length);
-            if (expression.StartsWith(ResourcePrefix, StringComparison.Ordinal))
-            {
-                string resource = expression.Substring(ResourcePrefix.Length, length - ResourcePrefix.Length - 2);
-                return baseUrl + resource;
-            }
+            string resource = expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - 2);
+            return baseUrl + resource;
         }
 
         return "";
     }
 
-    private static bool IsValidExpression(string content, int startIndex, int length, int prefixLength)
-    {
-        return length > (prefixLength + 2) &&
-               content[startIndex] == '\'' &&
-               content[startIndex + length - 1] == '%';
-    }
 }
-
-
 
 public class TemplateRenderer
 {
