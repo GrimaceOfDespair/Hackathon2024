@@ -7,6 +7,9 @@ using System.Text;
 
 public static class ExpressionTransformer
 {
+    private const string ItemValuePrefix = "itemValue('";
+    private const string ResourcePrefix = "resource('";
+
     public static string RenderExpressions(string content, string baseUrl, Dictionary<string, object> data = null)
     {
         if (string.IsNullOrEmpty(content))
@@ -14,20 +17,21 @@ public static class ExpressionTransformer
 
         StringBuilder result = new StringBuilder(content.Length);
         int currentIndex = 0;
+        int contentLength = content.Length;
 
-        while (currentIndex < content.Length)
+        while (currentIndex < contentLength)
         {
             int expressionStartIndex = content.IndexOf("[%", currentIndex, StringComparison.Ordinal);
             if (expressionStartIndex == -1)
             {
-                result.Append(content, currentIndex, content.Length - currentIndex);
+                result.Append(content, currentIndex, contentLength - currentIndex);
                 break;
             }
 
             int expressionEndIndex = content.IndexOf("%]", expressionStartIndex + 2, StringComparison.Ordinal);
             if (expressionEndIndex == -1)
             {
-                result.Append(content, expressionStartIndex, content.Length - expressionStartIndex);
+                result.Append(content, expressionStartIndex, contentLength - expressionStartIndex);
                 break;
             }
 
@@ -45,26 +49,32 @@ public static class ExpressionTransformer
         return result.ToString();
     }
 
-
     private static string ProcessExpression(string expression, string baseUrl, Dictionary<string, object> data)
     {
-        const string ItemValuePrefix = "itemValue('";
-        const string ResourcePrefix = "resource('";
-
-        if (expression.StartsWith(ItemValuePrefix) && expression.EndsWith("')"))
+        if (IsValidExpression(expression, ItemValuePrefix.Length) && expression.EndsWith("')"))
         {
             string field = expression.Substring(ItemValuePrefix.Length, expression.Length - ItemValuePrefix.Length - 2);
-            return data?.GetValueOrDefault(field)?.ToString() ?? "";
+            return GetValueOrDefault(data, field);
         }
-        else if (expression.StartsWith(ResourcePrefix) && expression.EndsWith("')"))
+        else if (IsValidExpression(expression, ResourcePrefix.Length) && expression.EndsWith("')"))
         {
             string resource = expression.Substring(ResourcePrefix.Length, expression.Length - ResourcePrefix.Length - 2);
             return baseUrl + resource;
         }
 
-        return "";
+        return string.Empty;
     }
 
+    private static bool IsValidExpression(string expression, int prefixLength)
+    {
+        int expressionLength = expression.Length;
+        return expressionLength > (prefixLength + 2) && expression[0] == '\'' && expression[expressionLength - 1] == '%';
+    }
+
+    private static string GetValueOrDefault(Dictionary<string, object> data, string field)
+    {
+        return data?.GetValueOrDefault(field)?.ToString() ?? string.Empty;
+    }
 }
 
 public class TemplateRenderer
